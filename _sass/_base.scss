@@ -87,6 +87,13 @@ div.highlight {
     }
 }
 
+include media-query($palm) {
+    div.highlight {
+        margin-left: 0;
+        margin-right: 0;
+    }
+}
+
 blockquote {
     color: $grey-color;
     border-left: 4px solid $grey-color-light;
