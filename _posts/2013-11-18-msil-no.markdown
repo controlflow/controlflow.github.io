@@ -2,7 +2,7 @@
 layout: post
 title:  "Скажи MSIL-опкоду no."
 date:   18-11-2013
-categories: csharp clr cli rotor managed
+tags:   csharp clr cli rotor managed
 ---
 
 Некоторое время назад я долго сидел в подсистемах нашего продукта, связанных с чтением метаданных и MSIL-байткода. Совершенно случайно нарвался на определение такой MSIL-инструкции:
