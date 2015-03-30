@@ -1,6 +1,3 @@
-/**
- * Reset some basic elements
- */
 body, h1, h2, h3, h4, h5, h6,
 p, blockquote, pre, hr,
 dl, dd, ol, ul, figure {
@@ -8,11 +5,6 @@ dl, dd, ol, ul, figure {
     padding: 0;
 }
 
-
-
-/**
- * Basic styling
- */
 body {
     font-family: $base-font-family;
     font-size: $base-font-size;
@@ -23,11 +15,6 @@ body {
     -webkit-text-size-adjust: 100%;
 }
 
-
-
-/**
- * Set `margin-bottom` to maintain vertical rhythm
- */
 h1, h2, h3, h4, h5, h6,
 p, blockquote, pre,
 ul, ol, dl, figure,
@@ -35,21 +22,14 @@ ul, ol, dl, figure,
     margin-bottom: $spacing-unit / 2;
 }
 
-
-
-/**
- * Images
- */
 img {
     max-width: 100%;
     vertical-align: middle;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
 }
 
-
-
-/**
- * Figures
- */
 figure > img {
     display: block;
 }
@@ -58,13 +38,13 @@ figcaption {
     font-size: $small-font-size;
 }
 
-
-
-/**
- * Lists
- */
 ul, ol {
-    margin-left: $spacing-unit;
+    text-align: justify;
+    //margin-left: $spacing-unit;
+    margin-left: 0;
+    list-style-position: inside;
+    list-style-type: square;
+    text-indent: 1.5em;
 }
 
 li {
@@ -74,20 +54,10 @@ li {
     }
 }
 
-
-
-/**
- * Headings
- */
 h1, h2, h3, h4, h5, h6 {
-    font-weight: 300;
+    //font-weight: 300;
 }
 
-
-
-/**
- * Links
- */
 a {
     color: $brand-color;
     text-decoration: none;
@@ -102,11 +72,21 @@ a {
     }
 }
 
+p {
+    text-align: justify;
+}
 
+p + p { text-indent: 1.5em; }
+ul + p { text-indent: 1.5em; }
 
-/**
- * Blockquotes
- */
+div.highlight {
+    margin-left: 1.5em;
+    margin-right: 1.5em;
+    + p {
+        text-indent: 1.5em;
+    }
+}
+
 blockquote {
     color: $grey-color;
     border-left: 4px solid $grey-color-light;
@@ -120,21 +100,16 @@ blockquote {
     }
 }
 
-
-
-/**
- * Code formatting
- */
 pre,
 code {
     font-size: 15px;
-    border: 1px solid $grey-color-light;
-    border-radius: 3px;
-    background-color: #eef;
+    //border: 1px solid $grey-color-light;
+    //border-radius: 3px;
+    background-color: #f4f4f4;
 }
 
 code {
-    padding: 1px 5px;
+    //padding: 1px 2px;
 }
 
 pre {
