@@ -13,10 +13,10 @@ tags: fsharp joinads expreremental compiler computation expressions monads
 
 {% highlight fsharp %}
 let parallelOr = future {
-    match! (after 1000 true), (after 100 true) with
-    | !true, _ -> return true
-    | _, !true -> return true
-    | !a, !b -> return a || b
+  match! (after 1000 true), (after 100 true) with
+  | !true, _ -> return true
+  | _, !true -> return true
+  | !a, !b -> return a || b
 }
 {% endhighlight %}
 

@@ -9,32 +9,30 @@ tags: asm assembly visualstudio debugging try finally goto
 
 {% highlight C# %}
 class Foo {
-    static void Main() {
-        bool jump = true;
+  static void Main() {
+    bool jump = true;
 
-        Label:
-        try {
-            System.Console.WriteLine("try");
-            if (jump) {
-                jump = false;
-                goto Label;
-            }
-        }
-        finally {
-            System.Console.WriteLine("finally");
-        }
+    Label:
+    try {
+      System.Console.WriteLine("try");
+      if (jump) {
+        jump = false;
+        goto Label;
+      }
+    } finally {
+      System.Console.WriteLine("finally");
     }
+  }
 }
 {% endhighlight %}
 
 Который выводит на экран:
 
-```
-try
-finally
-try
-finally
-```
+    try
+    finally
+    try
+    finally
+
 То есть любой выход из блока `try`, даже прыжком “вверх” по коду, должен завершаться вызовом блока `finally`. Я с ассемблером не дружу, но оказалось всё очень просто:
 
 {% highlight C# %}
@@ -101,23 +99,23 @@ finally
 
 Возникает вопрос: как посмотреть достоверный disassembly управляемого кода? Очень просто - включаем в студии *address-level debugging*:
 
-![](http://media.tumblr.com/tumblr_lgggnpSQk41qdrm28.png)
+![]({{ site.baseurl }}/images/clr-disassembly.png)
 
 Вставляем в код вызов `System.Diagnostics.Debugger.Break()`, собираем проект в *RELEASE*. Если вам надо видеть *соответствие *C#-исходников с соответствующими машинными инструкциями, то надо компилировать с отключенными оптимизациями (это оптимизации на MSIL-уровне, они относительно не сильно видоизменяют машинный код):
 
-![](http://media.tumblr.com/tumblr_lgggrdazXr1qdrm28.png)
+![]({{ site.baseurl }}/images/clr-disassembly2.png)
 
 Включая оптимизации C#, вы получите *достоверный* ассемблерный листинг, но что там есть что - вам придётся разбираться самому. В любом случае необходимо включить компиляцию с полной debug-информацией:
 
-![](http://media.tumblr.com/tumblr_lgggrw683o1qdrm28.png)
+![]({{ site.baseurl }}/images/clr-disassembly3.png)
 
 После этого запускаем код без отладчика (это задействует оптимизации на уровне JIT):
 
-![](http://media.tumblr.com/tumblr_lgggubPA4Z1qdrm28.png)
+![]({{ site.baseurl }}/images/clr-disassembly4.png)
 
 Дожидаемся срабатывания `Debugger.Break()` и вызываем отладчик:
 
-![](http://media.tumblr.com/tumblr_lggij1fNMo1qdrm28.png)
+![]({{ site.baseurl }}/images/clr-disassembly5.png)
 
 Подключаемся нужным экземпляром Visual Studio и вызываем из контекстного меню *Go to disassembly* - вот и всё, можно смело курить ассмеблерные листинги. Однако следует обратить внимание вот ещё на что:
 
@@ -127,7 +125,7 @@ finally
 using System.Runtime.CompilerServices;
 
 class Foo {
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void NoInline() { }
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  public static void NoInline() { }
 }
 {% endhighlight %}
