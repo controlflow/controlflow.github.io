@@ -25,10 +25,10 @@ tags: csharp attributes typevar
 
 На деле (компилятор С# 4.0) всё оказывается несколько иначе, код:
 
-{% highlight C# %}
+```c#
 [someCrazyAttributeTargetLocation: Serializable]
 class Foo { }
-{% endhighlight %}
+```
 
 Компилируется без ошибок, но с одним warning’ом:
 
@@ -36,13 +36,13 @@ class Foo { }
 
 Соответственно, в рантайме получаем `typeof(Foo).IsSerializable == false`. Однако, [читая](http://rsdn.ru/forum/dotnet/4024505.aspx) Владимира Решетникова на rsdn, можно обнаружить, что существует ещё один *attribute-target-specifier*, не перечисленный в грамматике C#, который компилятор воспринимает без warning’а:
 
-{% highlight C# %}
+```c#
 [AttributeUsage(AttributeTargets.GenericParameter)]
 sealed class FooAttribute : Attribute { }
 
 sealed class Bar<[typevar: Foo] T> { }
 
-{% endhighlight %}
+```
 
 Знакомьтесь, скрытый *attribute-target-specifier* - `typevar`. Применение атрибута где-либо вне типа-параметра (если убрать `[AttributeUsage]`) будет результировать предупреждением *CS0658*.
 

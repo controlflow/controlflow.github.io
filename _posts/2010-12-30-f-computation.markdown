@@ -7,7 +7,7 @@ tags: fsharp memoize expressions compiler comparer equality computation expressi
 ---
 Сегодня предлагаю вашему вниманию ещё один, наиболее извращённый способ мемоизации в F#. Цель - получить удобный синтаксис для выделения частей функций, подвергаемых мемоизации без явного указания параметров, например:
 
-{% highlight fsharp %}
+```f#
 let doWork x y =
   // ...
   let result = memo {
@@ -18,11 +18,11 @@ let doWork x y =
 
   // ...
   result + 1
-{% endhighlight %}
+```
 
 Давайте перепишем код выше следующим образом:
 
-{% highlight fsharp %}
+```f#
 let doWork' x y =
   // ...
   let f = (fun() ->
@@ -34,11 +34,11 @@ let doWork' x y =
 
   // ...
   result + 1
-{% endhighlight %}
+```
 
 То есть обернём мемоизируемое выражение в лямбда-выражение без аргументов и тут же его вызовем. Если посмотреть под Reflector’ом код выше, то можно обнаружить, что компилятор F# генерирует класс-наследник `FSharpFunc<TArg, TResult>` такого вида:
 
-{% highlight C# %}
+```c#
 [Serializable]
 internal class f@44 : FSharpFunc<Unit, int> {
   public int x;
@@ -53,7 +53,7 @@ internal class f@44 : FSharpFunc<Unit, int> {
     return (this.x + this.y);
   }
 }
-{% endhighlight %}
+```
 
 То есть все параметры мемоизации (значения, на которых мы замкнулись) становятся полями этого класса. Вопрос: почему бы не хранить экземпляры данного класса как ключи кэша, ведь они как раз хранят весь набор параметров мемоизации?
 
@@ -61,22 +61,22 @@ internal class f@44 : FSharpFunc<Unit, int> {
 
 А автоматическое оборачивание в `(fun() -> …)` возможно, при определении в классе-builder’е [computation expression](http://blogs.msdn.com/b/dsyme/archive/2007/09/22/some-details-on-f-computation-expressions-aka-monadic-or-workflow-syntax.aspx) метода `Delay(f: unit -> ‘T)`. Такой код:
 
-{% highlight fsharp %}
+```f#
 let result = memo {
   return x + y
 }
-{% endhighlight %}
+```
 
 Раскрывается компилятором как:
 
-{% highlight fsharp %}
+```f#
 let result = 
   memo.Delay(fun() -> x + y)
-{% endhighlight %}
+```
 
 Без лишних слов привожу сигнатуру модуля `ComparerCompiler`, предназначенного для компилирования компаратора по типу и набору его полей:
 
-{% highlight fsharp %}
+```f#
 module ComparerCompiler
 
 open System.Collections.Generic
@@ -84,11 +84,11 @@ open System.Reflection
 
 [<RequiresExplicitTypeArguments>]
 val compile: FieldInfo[] -> IEqualityComparer<'T>
-{% endhighlight %}
+```
 
 И его реализацию:
 
-{% highlight fsharp %}
+```f#
 /// Модуль с функциями для компилирования компараторов
 /// экземпляров заданных типов по набору полей
 module ComparerCompiler
@@ -204,11 +204,11 @@ let compile<'T> (fields: FieldInfo[]) =
           null -> 0
         | :? 'T as x -> hashCode.Invoke(x)
         | _ -> raise (ArgumentException "invalid type") }
-{% endhighlight %}
+```
 
 Сигнатуру модуля мемоизации:
 
-{% highlight fsharp %}
+```f#
 module MemoBuilder
 
 type MemoBuilder<'T> =
@@ -217,11 +217,11 @@ type MemoBuilder<'T> =
   member Delay: (unit -> 'T) -> 'T
 
 val inline memo<'a> : MemoBuilder<'a>
-{% endhighlight %}
+```
 
 И его реализацию:
 
-{% highlight fsharp %}
+```f#
 module MemoBuilder
 
 open System
@@ -286,11 +286,11 @@ type MemoBuilder<'T>() =
 
 /// Построитель мемоизированного выражения
 let inline memo<'a> = MemoBuilder<'a>()
-{% endhighlight %}
+```
 
 И, наконец, пример использования мемоизатора:
 
-{% highlight fsharp %}
+```f#
 open MemoBuilder
 
 let func x y z =
@@ -325,7 +325,7 @@ func 1 2 4
 func 2 1 5
 func 2 1 5
 func 2 1 5
-{% endhighlight %}
+```
 
 Вывод:
 

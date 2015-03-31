@@ -7,7 +7,7 @@ tags: fsharp csharp async workflow event-based asynchronous pattern
 ---
 Сегодня предлагаю поговорить о модели асинхронного программирования в .NET, основанной на событиях ([event-based asynchronous pattern](http://msdn.microsoft.com/en-us/library/wewwczdw.aspx)). Если вкратце, то всё очень просто:
 
-{% highlight C# %}
+```c#
 static void AsyncDownloadGoogle() {
   var uri = new Uri("http://google.com");
   var client = new WebClient();
@@ -41,7 +41,7 @@ static void AsyncDownloadGoogle() {
     client.CancelAsync();
   }
 }
-{% endhighlight %}
+```
 
 То есть основа паттерна – получения результатов асинхронной операции через аргументы события (наследник класса `System.ComponentModel .AsyncCompletedEventArgs`), при этом существует возможность определить, что операция была отменена или завершена с ошибкой. Нюансы возникают в двух случаях:
 
@@ -54,7 +54,7 @@ static void AsyncDownloadGoogle() {
 
 Я это всё к тому, что *event-based asynchronous pattern* конечно же забыли, поэтому предлагаю вашему вниманию пару методов-расширений, предназначенных для преобразования асинхронных операций, выполненных в рамках данного паттерна, в родной для F# тип `Async<’a>` (получился неплохой пример применения метода `Async.FromContinuations`, надеюсь, комментариев будет достаточно):
 
-{% highlight fsharp %}
+```f#
 module AsyncExtensions
 
 open System
@@ -134,22 +134,22 @@ type Async with
               (fun e -> e.UserState = token) completedEvent,
       ?cancelAction = cancel,
       executeAction = fun() -> executeAction token)
-{% endhighlight %}
+```
 
 Теперь можно очень легко определить тип-расширение для операции `DownloadData` класса `WebClient` (обратите внимание на соглашение об именовании подобных методов – префикс `Async`):
 
-{% highlight fsharp %}
+```f#
 type WebClient with
   member this.AsyncDownloadData(uri: Uri) =
      Async.FromEventPattern(
        this.DownloadDataCompleted,
        (fun()-> this.DownloadDataAsync uri),
        (fun()-> this.CancelAsync()))
-{% endhighlight %}
+```
 
 Можно дополнительно преобразовывать результат операции, доставая из аргументов события результат операции:
 
-{% highlight fsharp %}
+```f#
 type WebClient with
   member this.AsyncDownloadData(uri: Uri) =
     async {
@@ -160,11 +160,11 @@ type WebClient with
       
       return e.Result
     }
-{% endhighlight %}
+```
 
 Теперь исходный пример можно выразить на F# следующим образом:
 
-{% highlight fsharp %}
+```f#
 open System
 open System.Net
 open System.Threading
@@ -190,6 +190,6 @@ let asyncDownloadGoogle() =
   Async.RunSynchronously(work, cancellationToken = token.Token)
   let key = Console.ReadKey true
   if (key.Key = ConsoleKey.Escape) then token.Cancel()
-{% endhighlight %}
+```
 
 Использование `CancellationTokenSource` выглядит не очень симпатично (определение обработчика внутри workflow), однако это мощный и обобщённый механизм отмены асинхронных операций, при этом от пользователя скрывается передача токена по всему workflow, что существенно упрощает код.

@@ -12,7 +12,7 @@ categories: 12984834753
 
 Код теста (warning, написано на коленке):
 
-{% highlight C# %}
+```c#
 using System;
 using System.Diagnostics;
 using System.Reflection;
@@ -92,4 +92,4 @@ static class TestClass<T> where T : struct
   [MethodImpl(MethodImplOptions.NoInlining)]
   static T Foo5(T x) { return x; }
 }
-{% endhighlight %}
+```

@@ -9,7 +9,7 @@ tags: cas clr dotnet entry point module reflection.emit sre
 
 * Самый очевидный вариант - *статический конструктор типа*, определяющего метод точки входа. Не смотря на различные [правила](http://msmvps.com/blogs/jon_skeet/archive/2010/01/26/type-initialization-changes-in-net-4-0.aspx) порядка инициализации статических данных в разных версиях CLR, на практике инициализатор типа всегда вызывается до вызова точки входа, вне зависимости от наличия/доступа к статическим полям:
 
-{% highlight C# %}
+```c#
 class Program {
   static Program() {
     System.Console.WriteLine("type initializer");
@@ -19,11 +19,11 @@ class Program {
     System.Console.WriteLine("entry point");
   }
 }
-{% endhighlight %}
+```
 
 * Второй способ вторгнуться до вызова точки входа - *CAS-атрибуты*. Механизм CAS объявлен deprecated в .NET 4.0, однако продолжает работать (мне на радость), правда вызывая дичайшие тормоза (вызов метода с CAS-атрибутом на 3-4 порядка медленнее, чем вызов обычного метода!). Атрибутом-наследником `CodeAccessSecurityAttribute` можно отметить методы и типы, а так же сборки. Например, можно определить такой атрибут в сборке `CasAssembly.dll`:
 
-{% highlight C# %}
+```c#
 using System;
 using System.Security;
 using System.Security.Permissions;
@@ -43,11 +43,11 @@ public sealed class FooAttribute : CodeAccessSecurityAttribute {
     return null; // не возвращаем ничего
   }
 }
-{% endhighlight %}
+```
 
 А затем его использовать в приложении `ConsoleApplication.exe`:
 
-{% highlight C# %}
+```c#
 using System;
 using System.Security.Permissions;
 
@@ -65,7 +65,7 @@ class Program {
     Console.WriteLine("entry point");
   }
 }
-{% endhighlight %}
+```
 
 То вывод будет следующим:
 
@@ -91,7 +91,7 @@ entry point
 
 Проверить это мы можем, сгенерировав сборку с конструктором модуля через программный интерфейс генерации кода - `System.Reflection.Emit` (или с помощью компилятора `ilasm`):
 
-{% highlight C# %}
+```c#
 using System;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -146,7 +146,7 @@ static class Program {
     assemblyBuilder.Save(moduleName);
   }
 }
-{% endhighlight %}
+```
 
 Получаем сборку, запуск которой выводит на экран:
 
@@ -161,7 +161,7 @@ entry point
 
 Менеджер доменов представляет собой тип-наследник `System.AppDomainManager`, определённый в подписанной строгим именем сборке, находящейся в GAC. Например:
 
-{% highlight C# %}
+```c#
 using System;
 
 public class FooDomainManager : AppDomainManager {
@@ -169,11 +169,11 @@ public class FooDomainManager : AppDomainManager {
     Console.WriteLine("init domain");
   }
 }
-{% endhighlight %}
+```
 
 Далее различными можно указать данный менеджер для использования в файле `App.config` любого приложения (эта возможность доступна только начиная с .NET 4.0) следующим образом:
 
-{% highlight xml %}
+```xml
 <?xml version="1.0"?>
 <configuration>
   <runtime>
@@ -185,7 +185,7 @@ public class FooDomainManager : AppDomainManager {
     <appDomainManagerType value="FooDomainManager"/>
   </runtime>
 </configuration>
-{% endhighlight %}
+```
 
 До .NET 4.0 можно было удобно задать `AppDomainManager` лишь глобально - для всей системы, установив переменные окружения (так же возможно задать менеджер через реестр windows или через unmanaged API в случае хостинга CLR внутри неуправляемого приложения):
 

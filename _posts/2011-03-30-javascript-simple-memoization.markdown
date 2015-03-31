@@ -9,7 +9,7 @@ tags: js javascript jscript memoize
 
 Одним из первых велосипедов была мемоизация произвольных функций с “каррированными” (отдельными для каждого из аргументов) кэшами:
 
-{% highlight JS %}
+```js
 var ControlFlow = {
   memoize: function(func) {
     if (typeof func !== 'function')
@@ -30,11 +30,11 @@ var ControlFlow = {
     };
   }
 }
-{% endhighlight %}
+```
 
 Не смотря на некоторые грабли, возникшие при написании, гибкость и лаконичность языка всё же поражает. Проверим мемоизацию на любимом всеми факториале:
 
-{% highlight JS %}
+```js
 var Math = {
   fact: function(n) {
     console.log('fact('+n+')');
@@ -42,13 +42,13 @@ var Math = {
     return n * Math.fact(n - 1);
   }
 }
-{% endhighlight %}
+```
 
 Использование (можно и не подменять исходную функцию):
 
-{% highlight JS %}
+```js
 Math.fact = ControlFlow.memoize(Math.fact);
-{% endhighlight %}
+```
 
 Теперь вызовем разок:
 
@@ -69,7 +69,7 @@ Math.fact = ControlFlow.memoize(Math.fact);
 
 То есть для вычисления факториала `6` потребовалось только два рекурсивных вызова, так как значение `fact(4)` находится в кеше и не вычисляется заново. Аналогично поддерживаются функции произвольного количества аргументов:
 
-{% highlight JS %}
+```js
 var Math = {
   sum: ControlFlow.memoize(function() {
     // страшное преобразование arguments
@@ -83,7 +83,7 @@ var Math = {
     return sum;
   })
 }
-{% endhighlight %}
+```
 
 Usage:
 

@@ -11,7 +11,7 @@ tags: fsharp computation expressions monads maybe option
 
 Начнём с монады `maybe`, а в качестве типа вычисления `M<’a>` будем использовать тип `Option<’a>` из стандартной библиотеки F#. Сигнатура:
 
-{% highlight fsharp %}
+```f#
 namespace FSharp.Monads
 
 type MaybeBuilder =
@@ -20,11 +20,11 @@ type MaybeBuilder =
   member Bind: 'a option * ('a -> 'b option) -> 'b option
   member Return: 'a -> 'a option
   member ReturnFrom: 'a option -> 'a option
-{% endhighlight %}
+```
 
 Реализация:
 
-{% highlight fsharp %}
+```f#
 namespace FSharp.Monads
 
 type MaybeBuilder() =
@@ -34,11 +34,11 @@ type MaybeBuilder() =
                | None   -> None
   member b.Return x = Some x
   member b.ReturnFrom x = x : _ option
-{% endhighlight %}
+```
 
 В качестве пример использования, можно привести программу, которая ожидает ввод пользователем целого числа и пытается найти порядковый номер введённого числа в последовательности простых чисел, при этом в случае не числового ввода или ввода числа, не являющегося простым, программа останавливается и возвращает `None`:
 
-{% highlight fsharp %}
+```f#
 open System
 open FSharp.Monads
 
@@ -72,11 +72,11 @@ match tryInputPrime() with
 | Some(prime, index) ->
           printfn "ввели простое число %d (№%d)" prime index
 | None -> printfn "ввод простого числа завершился неудачей"
-{% endhighlight %}
+```
 
 Вот как выглядит функция `inputInt32` “без сахара”, обратите внимание на вызов метода `Zero()`:
 
-{% highlight fsharp %}
+```f#
 /// Попытка считывания с консоли целого числа
 let inputInt32'() =
   let str = Console.ReadLine()
@@ -84,11 +84,11 @@ let inputInt32'() =
   if success
     then maybe.Return(value)
     else maybe.Zero()
-{% endhighlight %}
+```
 
 А вот и вся “поднаготная” функции `tryInputPrime`:
 
-{% highlight fsharp %}
+```f#
 /// Попытка считывания с консоли простого числа
 let tryInputPrime'() =
   printfn "введите простое число от 2 до 100:"
@@ -99,6 +99,6 @@ let tryInputPrime'() =
         List.tryFindIndex ((=) prime) primes,
         fun index ->
           maybe.Return(prime, index + 1)))
-{% endhighlight %}
+```
 
 Обратите так же внимание на модуль `Option` из состава стандартной библиотеки F#, он содержит дополнительные функции для работы со значениями типа `'a option`, такие как `map` и `fold` и другие.

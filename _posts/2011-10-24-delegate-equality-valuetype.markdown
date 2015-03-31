@@ -7,7 +7,7 @@ tags: csharp clr .net delegate valuetype
 ---
 Видели [предыдущий пост](http://controlflow.tumblr.com/post/11860844787/delegate-equality-base)? Как вам такое продолжение истории:
 
-{% highlight C# %}
+```c#
 using System;
 
 struct Foo {
@@ -26,7 +26,7 @@ class Bar {
   }
 }
 
-{% endhighlight %}
+```
 
 Конечно же отписки снова не происходит! Более того, снаружи такого события отписку такого метода произвести *невозможно*.
 

@@ -11,7 +11,7 @@ tags: fsharp cont computation expressions monads callcc getcc
 
 Сигнатура пространства имён:
 
-{% highlight fsharp %}
+```f#
 namespace FSharp.Monads
 
 type Cont<'a, 'result> = Cont of (('a -> 'result) -> 'result)
@@ -36,11 +36,11 @@ type ContBuilder =
 [<AutoOpen>]
 module ExtraTopLevelOperators =
   val cont : ContBuilder
-{% endhighlight %}
+```
 
 Реализация:
 
-{% highlight fsharp %}
+```f#
 namespace FSharp.Monads
 
 type Cont<'a, 'result> = Cont of (('a -> 'result) -> 'result)
@@ -80,11 +80,11 @@ type ContBuilder() =
 [<AutoOpen>]
 module ExtraTopLevelOperators =
   let cont = ContBuilder()
-{% endhighlight %}
+```
 
 Пример моделирования `goto`-перехода по метке - следующий код будет выполняться пока пользователь будет нажимать клавишу пробела:
 
-{% highlight fsharp %}
+```f#
 open FSharp.Monads
 open System
 
@@ -101,11 +101,11 @@ let goto() =
     printfn "completed!"
   }
   |> Cont.run ignore
-{% endhighlight %}
+```
 
 Без “сахара” эта функция выглядит следующим образом (обратите внимание, что пришлось определить члены построителя computation expression, такие как `Combine` и `Delay`):
 
-{% highlight fsharp %}
+```f#
 let goto'() =
   printfn "press space"
   cont.Combine(
@@ -124,11 +124,11 @@ let goto'() =
     )
   )
   |> Cont.run ignore
-{% endhighlight %}
+```
 
 С помощью другой функции - `getcc’` - возможно дополнительно передавать некоторое значение при возврате к продолжению, что позволяет моделировать императивные циклы:
 
-{% highlight fsharp %}
+```f#
 let loop() =
   cont {
     let! value, label = Cont.getcc' 0
@@ -138,11 +138,11 @@ let loop() =
       then return! label (value + 1)
   }
   |> Cont.run id
-{% endhighlight %}
+```
 
 Без синтаксиса computation expressions:
 
-{% highlight fsharp %}
+```f#
 let loop'() =
   cont.Bind(
     Cont.getcc' 0,
@@ -153,6 +153,6 @@ let loop'() =
         then cont.ReturnFrom(label (value + 1))
         else cont.Zero())
   |> Cont.run id
-{% endhighlight %}
+```
 
 То есть `getcc’` возвращает кортеж из значения некоторого типа и функции с аргументом данного типа, возвращающую продолжение. Какой аргументы вы передадите функции, такое значение и вернет `getcc’` первым элементом кортежа, а изначальное значение берётся из аргумента вызова `getcc’`.

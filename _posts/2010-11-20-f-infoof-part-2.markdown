@@ -7,7 +7,7 @@ tags: fsharp infoof pattern-matching patterns quotations
 ---
 Итак, следующей задачей будет являться написание функции `methodof`, возвращающей экземпляр `System.Reflection.MethodInfo` по выражению вызова (и не только) метода или функции. На этот раз подробно этапы разработки я приводить не буду, лишь продемонстрирую, как цитируются те или иные использования методов типов и функций модулей. Для этого определим следующий тип и модуль:
 
-{% highlight fsharp %}
+```f#
 type Foo() =
   static member StaticM() = ()
   member this.InstanceM() = ()
@@ -21,11 +21,11 @@ module Bar =
   let curried x y = x + y
   let mixed (a,b,c) (x,y) z = a+b+c+x+y+z
   let generic x = x
-{% endhighlight %}
+```
 
 И попробуем процитировать вызовы:
 
-{% highlight fsharp %}
+```f#
 let foo = Foo()
 <@ Foo.StaticM() @>
    Call (None, Void StaticM(), [])
@@ -48,11 +48,11 @@ let foo = Foo()
 <@ Bar.mixed (1,2,3) (5,6) 7 @>
    Call (None, Int32 mixed(Int32, Int32, Int32, Int32, Int32, Int32),
       [Value 1, Value 2, Value 3, Value 5, Value 6, Value 7])
-{% endhighlight %}
+```
 
 Тут вроде всё понятно, основа всех вызовов – образец `Call()`. Однако нам приходится указывать хоть какие-нибудь параметры, для того чтобы процитировать вызов, а реально это может потребоваться только если метод перегружен и требуется типами аргументов подсказать компилятору конкретную перегрузку. Однако можно не указывать аргументы вовсе и тогда F# будет трактовать метод/функцию как значение функционального типа. Посмотрим, как цитируются такие значения:
 
-{% highlight fsharp %}
+```f#
 <@ Foo.StaticM @>
    Lambda (unitVar, Call (None, Void StaticM(), []))
 
@@ -89,24 +89,24 @@ let foo = Foo()
                    Call (None, Int32 mixed(Int32, Int32, Int32,
                                            Int32, Int32, Int32),
                          [a, b, c, x, y, z])))))))))
-{% endhighlight %}
+```
 
 То есть F# генерирует лямбда-выражение, оборачивающее вызов исходного метода/функции (или несколько вложенных лямбда-выражений, если исходная функция содержит аргументы в каррированной форме). Опознавать такие конструкции нетривиально, поэтому в пространстве имён `Microsoft.FSharp.Quotations` есть модуль `DerivedPatterns`, содержащий активный образец `Lambdas`:
 
-{% highlight fsharp %}
+```f#
 let (DerivedPatterns.Lambdas(args, body)) = <@ Bar.mixed @>;;
 
 val args : Var list list = [[a; b; c]; [x; y]; [z]]
 val body : Expr =
   Call (None, Int32 mixed(Int32, Int32, Int32, Int32, Int32, Int32),
       [a, b, c, x, y, z])
-{% endhighlight %}
+```
 
 Теперь осталось лишь проверить список списков аргументов лямбды (`[[a; b; c]; [x; y]; [z]]`) на соответствие списку параметров при вызове в теле самой вложенной лямбды (`[a, b, c, x, y, z]`). В качестве упражнения очень советую попробовать реализовать активный образец `DerivedPatterns.Lambdas` самостоятельно - это достаточно увлекательная задача.
 
 В итоге можно реализовать вспомогательный активный образец `Func`, совпадающий с описанными выше функциональными значениями, сгенерированными F# из методов и функций. При этом необходимо учесть, что для методов, не имеющих параметров вовсе, генерируются лямбда-выражения с аргументом типа `unit`:
 
-{% highlight fsharp %}
+```f#
 let (|Func|_|) expr =
   let onlyVar = function Var v -> Some v | _ -> None
   match expr with
@@ -125,13 +125,13 @@ let (|Func|_|) expr =
            = List.concat args -> Some(target, info)
 
     | _ -> None
-{% endhighlight %}
+```
 
 Активный образец возвращает пару из экземпляра, чей метод вызывается и экземпляр `MethodInfo` этого метода/функции, при этом активный образец может не совпасть вовсе (об этом свидетельствует `|_|` в конце имени активного образца).
 
 Теперь достаточно легко определить функцию `methodof`, учитывая проблему со скрытыми `let`-выражениями, рассмотренную в первом посте этой серии:
 
-{% highlight fsharp %}
+```f#
 let methodof expr =
   match expr with
     // любые обычные вызовы: foo.Bar()
@@ -156,14 +156,14 @@ let methodof expr =
          when arg = var -> info
 
     | _ -> failwith "Not a method expression"
-{% endhighlight %}
+```
 
 И тут возникает один нюанс: такой `methodof` не всегда работает, если на вход подаётся выражение значения функционального типа, созданного из перегруженного метода:
 
-{% highlight fsharp %}
+```f#
 let foo = Foo()
 methodof<@ foo.OverloadedM @>
-{% endhighlight %}
+```
 
 > **error FS0041:**<br/>
 > A unique overload for method 'OverloadedM' could not be determined based on type information prior to this program point. The available overloads are shown below (or in the Error List window). A type annotation may be needed.<br/>
@@ -173,29 +173,29 @@ methodof<@ foo.OverloadedM @>
 
 Компилятору можно подсказать, явно типизируя выражение функционального типа:
 
-{% highlight fsharp %}
+```f#
 methodof<@ foo.OverloadedM : string -> unit @>
-{% endhighlight %}
+```
 
 При этом возможно частично не указывать типы, если это не будет мешать компилятору F# выбирать требуемую перегрузку (иногда достаточно указать только, что аргумент функционального типа является кортежем из *n* елементов, где *n* - количество параметров исходного метода, см. второй пример):
 
-{% highlight fsharp %}
+```f#
 methodof<@ foo.OverloadedM : string -> _ @>
 methodof<@ foo.OverloadedM : _ * _  -> _ @>
-{% endhighlight %}
+```
 
 Заодно определим функцию `methoddefof`, возвращающую *generic method definition* любого обобщённого метода/функции, реализация тривиальна:
 
-{% highlight fsharp %}
+```f#
 let methoddefof expr =
   match methodof expr with
     | info when info.IsGenericMethod -> info.GetGenericMethodDefinition()
     | info -> failwithf "%A is not generic" info
-{% endhighlight %}
+```
 
 Итак, проверяем:
 
-{% highlight fsharp %}
+```f#
 [ methodof<@ Console.ReadLine @>
   methodof<@ Console.ReadLine() @>
   methodof<@ Console.Write '1' @>
@@ -221,7 +221,7 @@ let methoddefof expr =
   methoddefof<@ Seq.map @> ]
 
 |> List.iter (printfn "%A")
-{% endhighlight %}
+```
 
 Выводит на экран:
 

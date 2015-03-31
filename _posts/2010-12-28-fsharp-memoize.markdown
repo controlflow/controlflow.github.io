@@ -7,7 +7,7 @@ tags: fsharp memoize generics curried closure
 ---
 Сегодня поговорим снова о мемоизации функций, на этот раз применительно к F#. Мемоизация в семействе ML-языков прекрасно выражается в виде функции высшего порядка, принимающую целевую функцию и возвращающую её мемоизированный вариант:
 
-{% highlight fsharp %}
+```f#
 let memoize f =
   let cache = System.Collections.Generic.Dictionary()
   fun x -> match cache.TryGetValue x with
@@ -15,11 +15,11 @@ let memoize f =
            | _ -> let result = f x
                   cache.Add(x, result)
                   result
-{% endhighlight %}
+```
 
 Испытываем:
 
-{% highlight fsharp %}
+```f#
 let incr x = printfn "incr invoked!"
              x + 1
 
@@ -28,7 +28,7 @@ let f = memoize incr
 printfn "f 1 = %d" (f 1)
 printfn "f 2 = %d" (f 2)
 printfn "f 1 = %d" (f 1)
-{% endhighlight %}
+```
 
 Вывод:
 
@@ -40,7 +40,7 @@ printfn "f 1 = %d" (f 1)
 
 Как и ожидалось, а что насчёт нескольких аргументов, заданных в виде кортежа?
 
-{% highlight fsharp %}
+```f#
 let add (x,y) = printfn "add invoked!"
                 x + y
 
@@ -49,7 +49,7 @@ let g = memoize add
 printfn "g (1,1) = %d" (g (1,1))
 printfn "g (1,2) = %d" (g (1,2))
 printfn "g (1,1) = %d" (g (1,1))
-{% endhighlight %}
+```
 
 Вывод:
 
@@ -61,7 +61,7 @@ printfn "g (1,1) = %d" (g (1,1))
 
 Тоже всё ок, так как для типов кортежей определены правила проверки на эквивалентность и вычисления хэш-значения, а значит аргументы в кортеже без проблем находятся в кэше. Но когда дело доходит до функций с аргументами в каррированной форме:
 
-{% highlight fsharp %}
+```f#
 let add x y = printfn "add invoked!"
               x + y
 
@@ -70,7 +70,7 @@ let g = memoize add
 printfn "g 1 1 = %d" (g 1 1)
 printfn "g 1 2 = %d" (g 1 2)
 printfn "g 1 1 = %d" (g 1 1)
-{% endhighlight %}
+```
 
 То мемоизация перестаёт работать:
 
@@ -83,10 +83,10 @@ printfn "g 1 1 = %d" (g 1 1)
 
 Чтобы понять, почему так происходит, достаточно лишь взглянуть на сигнатуры функций `memoize` и `add`:
 
-{% highlight fsharp %}
+```f#
 val memoize : ('a -> 'b) -> ('a -> 'b) when 'a : equality
 val add : int -> int -> int
-{% endhighlight %}
+```
 
 Вспоминаем, что в записи `int -> int -> int` стрелка право-ассоциативна, а значит сигнатура на самом деле выглядит как `int -> (int -> int)`. Получается, что мемоизации подвергается применение *первого* аргумента к функции `add`, то есть в кэше хранятся первые аргументы типа `int` и соответствующие им функции `int -> int`.
 
@@ -94,7 +94,7 @@ val add : int -> int -> int
 
 Полная реализация модуля:
 
-{% highlight fsharp %}
+```f#
 module Memoize
 
 open System
@@ -159,11 +159,11 @@ and private FuncMemoizer =
 
 /// Мемоизация функций с аргументами в каррированной форме
 let curried f = FuncMemoizer.Run f
-{% endhighlight %}
+```
 
 Пробуем применить:
 
-{% highlight fsharp %}
+```f#
 let add x y = printfn "add invoked!"
               x + y
 
@@ -172,7 +172,7 @@ let g = Memoize.curried add
 printfn "g 1 1 = %d" (g 1 1)
 printfn "g 1 2 = %d" (g 1 2)
 printfn "g 1 1 = %d" (g 1 1)
-{% endhighlight %}
+```
 
 Вывод:
 
@@ -184,7 +184,7 @@ printfn "g 1 1 = %d" (g 1 1)
 
 Теперь всё работает как и ожидалось, давайте задумаемся о недостатках… Самый большой недостаток данной реализации в том, что невозможно контролировать глубину мемоизации. То есть если исходная мемоизируемая функция с аргументами в каррированной форме возвращает другие функции, то они тоже будут мемоизированы:
 
-{% highlight fsharp %}
+```f#
 let func x y =
   fun a -> printfn "lambda invoked!"
            x + y + a
@@ -193,7 +193,7 @@ let f = Memoize.curried func
 
 printfn "(f 1 2) 3 = %d" ((f 1 2) 3)
 printfn "(f 1 2) 3 = %d" ((f 1 2) 3)
-{% endhighlight %}
+```
 
 Вывод:
 
@@ -204,7 +204,7 @@ lambda invoked!
 ```
 То есть возвращаемая функция так же подвергается мемоизации, а это может не требоваться. Исправить этот недостаток достаточно легко, введя для функции `memoize` параметр глубины и передавая его во вложенные вызовы `memoize`. Реализация доступна [здесь](http://pastebin.com/mJXGMF6d), демонстрация:
 
-{% highlight fsharp %}
+```f#
 let func x y =
   printfn "func invoked!"
   fun a -> printfn "lambda invoked!"
@@ -220,7 +220,7 @@ printfn "(f 1 2) 3 = %d" ((f 1 2) 3)
 printfn "2 args ======="
 printfn "(g 1 2) 3 = %d" ((g 1 2) 3)
 printfn "(g 1 2) 3 = %d" ((g 1 2) 3)
-{% endhighlight %}
+```
 
 Вывод:
 
@@ -238,7 +238,7 @@ printfn "(g 1 2) 3 = %d" ((g 1 2) 3)
 
 Ещё один небольшой недостаток данной реализации - использование памяти. Дело в том, что во всех кэшах, кроме самых внешних, хранится функция с частично применёнными аргументами в замыкании + те же аргументы являются ключами словарей. Это легко увидеть в отладчике VisualStudio на таком коде:
 
-{% highlight fsharp %}
+```f#
 let f a b c d e f =
     a + b + c + d + e + f
 
@@ -248,7 +248,7 @@ let fc = fb 3
 let fd = fc 4
 let fe = fd 5
 let ff = fe 6
-{% endhighlight %}
+```
 
 ![]({{ site.baseurl }}/images/fsharp-memoize.png)
 

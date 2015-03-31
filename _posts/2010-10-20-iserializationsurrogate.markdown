@@ -7,14 +7,14 @@ tags: csharp serialization surrogate yield
 ---
 Тяжёлая жизнь довела меня до того, что мне потребовалось сериализовать итераторы C#. Проблема в том, что компилятор C# не считает должным вешать атрибут `[Serializable]` на генерируемые для итераторов классы (а так же на классы-замыкания для лямбда-выражений и анонимных методов). В F# подобной проблемы не существует:
 
-{% highlight fsharp %}
+```f#
 let xs = seq { yield 1 } in xs.GetType().IsSerializable // true
 id.GetType().IsSerializable // true
-{% endhighlight %}
+```
 
 Один из вариантов решения проблемы - использовать объект-суррогат, подменяющий несериализуемый объект и описывающий корректный процесс сериализации / десериализации объекта. Самая простая реализация - проход рефлексией по полям объекта и сохранение их в объект `SerializationInfo` (вообщем-то нам ничего другого и не остаётся сделать, так как реальный тип итератора недоступен). Пример реализации:
 
-{% highlight C# %}
+```c#
 using System;
 using System.Reflection;
 using System.Runtime.Serialization;
@@ -55,11 +55,11 @@ sealed class AnySurrogate : ISerializationSurrogate
     return obj;
   }
 }
-{% endhighlight %}
+```
 
 Пример использования:
 
-{% highlight C# %}
+```c#
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -108,6 +108,6 @@ class Foo {
     }
   }
 }
-{% endhighlight %}
+```
 
 Похоже на то, что реализовав `ISurrogateSelector`, можно избавиться от необходимости в задании типа объекта при добавлении объекта-суррогата и сериализовать что угодно, не отмеченное `[Serializable]`, но это уже другая история…

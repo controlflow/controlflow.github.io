@@ -9,7 +9,7 @@ tags: csharp wp7 .net behavior
 
 Начнём с базового класса:
 
-{% highlight C# %}
+```c#
 using System.Windows;
 using System.Windows.Interactivity;
 using Microsoft.Phone.Controls;
@@ -79,11 +79,11 @@ public abstract class PhoneOrientationBehavior<T> : Behavior<T>
     AssociatedObject.Loaded -= ElementLoaded;
   }
 }
-{% endhighlight %}
+```
 
 Теперь можно определить наследника, реализующего сокрытие элементов управления в альбомной ориентации:
 
-{% highlight C# %}
+```c#
 using System.Windows;
 
 public sealed class PortraitOrientationVisibilityBehavior
@@ -98,11 +98,11 @@ public sealed class PortraitOrientationVisibilityBehavior
       ? Visibility.Visible : Visibility.Collapsed;
   }
 }
-{% endhighlight %}
+```
 
 Однако этот behavior не удастся применить, чтобы скрыть виндофоновый system tray и application bar (что может быть полезно, например, если он содержит лишь малозначимые пункты меню типа отправки feedback’а). Не проблема, создаём ещё одного наследника `PhoneOrientationBehavior` и применяем к `PhoneApplicationPage`'ам:
 
-{% highlight C# %}
+```c#
 using Microsoft.Phone.Controls;
 using Microsoft.Phone.Shell;
 
@@ -117,6 +117,6 @@ public sealed class PortraitOrientationSystemTrayVisibility
       AssociatedObject.ApplicationBar.IsVisible = isPortrait;
   }
 }
-{% endhighlight %}
+```
 
 А вообще по-хорошему, надо разобраться с templated-контролами и сделать layout-контрол, позволяющий задавать два шаблона layout’ов (portrait и landscape, соответственно) с некими content placeholder’ами и наполнять его контентом - это может существенно упростить разработку UI, поддерживающего две ориентации экрана.

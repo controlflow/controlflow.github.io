@@ -7,12 +7,12 @@ tags: csharp clr cli rotor managed
 ---
 Некоторое время назад я долго сидел в подсистемах нашего продукта, связанных с чтением метаданных и MSIL-байткода. Совершенно случайно нарвался на определение такой MSIL-инструкции:
 
-{% highlight C# %}
+```c#
 public static readonly Opcode No = new Opcode("no.",
   StackBehavior.Pop0, StackBehavior.Push0,
   OperandType.SByte, OpcodeType.Prefix, 2,
   OpcodeValue.No, FlowControl.Meta, false, 0);
-{% endhighlight %}
+```
 
 Никогда такой опкод раньше не видел, из определения видно что это префикс, а не самостоятельный опкод (а из префиксов всомнились только `tail.` и `constrained.`, хотя есть и другие). Что еще больше заинтересовало - в классе `System.Reflection.Emit.Opcodes` из стандартной библиотеки классов .NET Framework такого опкода вовсе не определено. Даже в подробной и вообще очень неплохой книге про MSIL - [Expert .NET 2.0 IL assembler](http://books.google.ru/books/about/Expert_NET_2_0_IL_Assembler.html?id=oAcCRKd6EZgC&redir_esc=y) - нету ни единого упоминания. А вот в библиотеке *Mono.Cecil* этот префикс нашелся - значит разработчики метадата-reader’ов/writer’ов точно знали что-то, недоступное всем остальным. Интереса добавляло не только загадочное имя опкода `no.`, но еще и `sbyte`-операнд (можно не только задать какой-то инструкции загадочный префикс `no.`, но еще и контроллировать его каким-то образом).
 

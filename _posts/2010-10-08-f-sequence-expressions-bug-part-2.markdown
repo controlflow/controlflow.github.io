@@ -7,7 +7,7 @@ tags: fsharp seq ienumerable dispose finally
 ---
 Немного изменив предыдущий код, я был искренне удивлён результатами:
 
-{% highlight fsharp %}
+```f#
 let xs = seq {
   try yield! seq {
     try yield! seq {
@@ -21,7 +21,7 @@ let xs = seq {
 }
 
 for _ in xs do ()
-{% endhighlight %}
+```
 
 Вывод оказался следующим: o__O
 
@@ -35,7 +35,7 @@ for _ in xs do ()
 
 Так почему код работает как и ожидается, не смотря на баг с исключениями в finally, описанный в предыдущем посте? Оказывается, всё очень просто: первые два finally выполняются во время вызовов MoveNext(), во втором возникает исключение, которое долетает до вызывающей стороны, которая в finally-блоке вызывает `.Dispose()` последовательности, а уже она “диспоузит” незакрытые `IEnumerator`'ы. Изменив код следующим образом:
 
-{% highlight fsharp %}
+```f#
 let xs = seq {
   try yield! seq {
     try yield! seq {
@@ -50,7 +50,7 @@ let xs = seq {
 }
 
 for _ in xs do ()
-{% endhighlight %}
+```
 
 Всё встаёт на свои места:
 

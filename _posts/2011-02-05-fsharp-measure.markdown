@@ -7,7 +7,7 @@ tags: fsharp measure stopwatch printf sprintf threadpriority gc
 ---
 Наверняка многие из вас, дорогие читатели, писали на многих языках программирования строчки, подобные этим:
 
-{% highlight fsharp %}
+```f#
 let timer = System.Diagnostics.Stopwatch.StartNew()
 
 for i = 0 to 100500 do
@@ -15,7 +15,7 @@ for i = 0 to 100500 do
 
 timer.Stop()
 printfn "elapsed=%O" timer.Elapsed
-{% endhighlight %}
+```
 
 Писать такую портянку для того, чтобы прикинуть производительность того или иного кусочка кода, обычно лень. Более того, данный код имеет недостатки и возможно улучшить актуальность возвращаемых им результатов. Основные направления для улучшений:
 
@@ -32,7 +32,7 @@ printfn "elapsed=%O" timer.Elapsed
 
 Так как я добрый и позаботился о вас, то вот сигнатура:
 
-{% highlight fsharp %}
+```f#
 module Measure
 
 /// Настройки измерения производительности
@@ -78,11 +78,11 @@ val run: (string * (unit -> unit)) list -> unit
 
 /// Измерение производительности кода с заданными настройками
 val runWithOptions: (string * (unit -> unit)) list -> TestOptions -> unit
-{% endhighlight %}
+```
 
 А вот и реализация модуля, который делает всё то, что я описал выше (усыпанная комментариями и различными вкусностями языка F#):
 
-{% highlight fsharp %}
+```f#
 module Measure
 
 open System
@@ -444,7 +444,7 @@ let runWithOptions (tests: (string * (unit -> unit)) list)
 
 /// Измерение производительности кода
 let run tests = runWithOptions tests defaults
-{% endhighlight %}
+```
 
 Пример вывода результатов:
 
@@ -461,7 +461,7 @@ let run tests = runWithOptions tests defaults
 
 Выводит результаты он достаточно симпатично, например, протестируем скорость работы функции `Printf.sprintf` из состава стандартной бибилиотеки F# по сравнению с конкатенацией строк и методом `System.String.Format`:
 
-{% highlight fsharp %}
+```f#
 // пропущенные через `id` значения
 // не заинлайнятся далее по коду
 let name = id "Alex"
@@ -489,7 +489,7 @@ Measure.runWithOptions [
     // и дополнительно отображаем мин/макс время
   ] { Measure.defaults with showMinimum = true
                             showMaximum = true }
-{% endhighlight %}
+```
 
 Получаем следующий результат (на машине старенький Athlon 64 X2 @2.4GHz):
 
@@ -499,7 +499,7 @@ Measure.runWithOptions [
 
 Оказывается, что большинство пользователей F# используют данную и другие функции из модуля `Printf` не совсем корректно. Всё семейство `printf`-функций из данного модуля на самом деле осуществляют разбор строки формата и динамически формируют функцию (часто с аргументами в каррированной форме, как в примере выше: `string -> int -> unit`). Функция возвращается пользователю и последующее применение всех аргументов вызывают печать в консоль/строку/`TextWriter`, смотря какой из функций модуля `Printf` вы пользуетесь. Существенное время тратится на формирование данной функции и этого можно избежать, если заранее вычислить эту функцию и сохранить в какой-нибудь `let`-привязке. Перепишем тест следующим образом и проверим результатом:
 
-{% highlight fsharp %}
+```f#
 let name = id "Alex"
 let age  = id 22
 
@@ -517,7 +517,7 @@ Measure.runWithOptions [
 
   ] { Measure.defaults with showMinimum = true
                             showMaximum = true }
-{% endhighlight %}
+```
 
 В итоге обнаруживаем, что время сокращается вдвое, а нагрузка на GC примерно на треть:
 

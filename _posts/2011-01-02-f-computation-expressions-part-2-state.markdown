@@ -9,7 +9,7 @@ tags: fsharp computation expressions monads state
 
 В качестве типа вычислений `M<’a>` будем использовать собственный тип-объединение `State<’a,’state>`, просто оборачивающий функции типа `'state -> 'a * 'state`. Дополнительно определяем модуль `State` для частых операций с состоянием и функции `run` для запуска вычисления. Сигнатура:
 
-{% highlight fsharp %}
+```f#
 namespace FSharp.Monads
 
 type State<'a, 'state> =
@@ -28,11 +28,11 @@ type StateBuilder =
   member Bind: State<'a,'s> * ('a -> State<'b,'s>) -> State<'b,'s>
   member Return: 'a -> State<'a,'s>
   member ReturnFrom : State<'a,'s> -> State<'a,'s>
-{% endhighlight %}
+```
 
 Реализация:
 
-{% highlight fsharp %}
+```f#
 namespace FSharp.Monads
 
 type State<'a, 'state> =
@@ -53,11 +53,11 @@ type StateBuilder() =
       let (State t) = f v in t s')
   member b.Return x = State(fun s -> x, s)
   member b.ReturnFrom x = x : State<_,_>
-{% endhighlight %}
+```
 
 В качестве примера, приведу реализацию [алгоритма Евклида](http://ru.wikipedia.org/wiki/%D0%90%D0%BB%D0%B3%D0%BE%D1%80%D0%B8%D1%82%D0%BC_%D0%95%D0%B2%D0%BA%D0%BB%D0%B8%D0%B4%D0%B0) для нахождения наибольшего общего делителя двух целых чисел. Императивный вариант на C# выглядит как-то так:
 
-{% highlight C# %}
+```c#
 int GCD(int x, int y) {
   while (x != y) {
     if (x < y) {
@@ -69,11 +69,11 @@ int GCD(int x, int y) {
 
   return x;
 }
-{% endhighlight %}
+```
 
 Так как изменяемое состояние здесь составляют две переменные `x` и `y`, то в качестве типа `'state` будет выступать кортеж типа `int * int`.
 
-{% highlight fsharp %}
+```f#
 open FSharp.Monads
 #nowarn "40"
 
@@ -94,11 +94,11 @@ let rec gcd = state {
 
 let x = State.run gcd (6, 21)
 printfn "gcd(6, 21) = %d" x
-{% endhighlight %}
+```
 
 Вариант “без сахара”:
 
-{% highlight fsharp %}
+```f#
 /// Алгоритм Евклида
 let rec gcd' =
   state.Bind(
@@ -109,6 +109,6 @@ let rec gcd' =
                           fun()-> state.ReturnFrom gcd')
                    else state.Bind(putX (x-y),
                           fun()-> state.ReturnFrom gcd'))
-{% endhighlight %}
+```
 
 Из-за большого количества скрытых функции, уймы замыканий, передачи через вычисления кортежа с состоянием и постоянного конструирования экземпляров `State<’a,’state>`, всё это работает, мягко говоря, неторопливо, так что не вздумайте всерьёз использовать что-то подобное в F#. Это лишь пример того, как можно моделировать изменяемое состояние с помощью монад.

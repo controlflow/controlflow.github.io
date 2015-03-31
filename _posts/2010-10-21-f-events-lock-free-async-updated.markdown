@@ -17,7 +17,7 @@ tags: fsharp events delegate lock-free subscription
 
 А вот и набросок класса, решаюшего обе проблемы:
 
-{% highlight fsharp %}
+```f#
 open System
 open System.Threading
 
@@ -107,7 +107,7 @@ type PowerEvent<'del, 'args
          let r = Interlocked.CompareExchange(&self.target,c,o)
          if obj.ReferenceEquals (r, o) = false then loop r
        loop self.target }
-{% endhighlight %}
+```
 
 Данный класс предлагает несколько политик синхронизации подписки:
 
@@ -123,7 +123,7 @@ type PowerEvent<'del, 'args
 
 Использовать практически так же, как обычные события F#:
 
-{% highlight fsharp %}
+```f#
 type Foo() =
     let event = PowerEvent<EventHandler, _>()
 
@@ -132,6 +132,6 @@ type Foo() =
     [<CLIEvent>] member this.Event1 = event.Publish
     [<CLIEvent>] member this.Event2 = event.PublishSync
     [<CLIEvent>] member this.Event3 = event.PublishLockFree
-{% endhighlight %}
+```
 
 К сожалению, серъёзному тестированию код не подвергался, так что используйте на свой страх и риск.

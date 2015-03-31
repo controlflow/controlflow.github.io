@@ -7,7 +7,7 @@ tags: csharp enumerable iterator yield return
 ---
 До недавнего времени совсем не знал, что методы-итераторы в C# (ещё с версии 2.0) могут возвращать типы, отличные от `IEnumerable<T>`:
 
-{% highlight csharp %}
+```c#
 using System.Collections;
 using System.Collections.Generic;
 
@@ -19,7 +19,7 @@ class Foo {
 
   static void Main() { }
 }
-{% endhighlight %}
+```
 
 Логично было бы полагать, что именно `IEnumerator`’ы можно возвращать для удобной реализации `IEnumerable<T>` своими типами, а я что-то совсем не догадывался… :(
 
@@ -28,8 +28,8 @@ class Foo {
 
 Кстати, такой итератор:
 
-{% highlight C# %}
+```c#
 IEnumerable Bar1() { yield return 1; }
-{% endhighlight %}
+```
 
 …на самом то деле возвращает значение типа `IEnumerable<object>`, но это нигде в спеке не документировано и полагаться на это, конечно же, не стоит… :)

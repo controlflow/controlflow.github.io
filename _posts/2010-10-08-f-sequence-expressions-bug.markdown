@@ -7,7 +7,7 @@ tags: fsharp seq ienumerable dispose finally
 ---
 Нашёл занятный баг в F# 2.0:
 
-{% highlight fsharp %}
+```f#
 let xs = seq {
   try yield 1
     yield! seq {
@@ -23,7 +23,7 @@ let xs = seq {
 }
 
 for _ in xs do ()
-{% endhighlight %}
+```
 
 Данный конечно же с грохотом падает, но интерес представляет то, какие блоки finally выполняются. Не смотря на то, что во втором по вложенности finally происходит исключение, внешние блоки finally тоже должны отработать, однако реальный вывод данного кода таков:
 

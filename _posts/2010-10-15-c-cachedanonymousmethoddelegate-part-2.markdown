@@ -9,17 +9,17 @@ tags: csharp cache delegate anonymous
 
 Рассмотрим такой код:
 
-{% highlight C# %}
+```c#
 static void ShowDevelopersBySkill(IEnumerable teams, int level) {
   foreach (var team in teams) {
     team.ShowBy(dev => dev.Skill >= level);
   }
 }
-{% endhighlight %}
+```
 
 Здесь лямбда-выражение замыкается на внешний контекст - параметр метода. Компилятор C# в данном случае генерирует closure-класс, который выглядит примерно так (имена изменены для большей читаемости):
 
-{% highlight C# %}
+```c#
 [CompilerGenerated]
 private sealed class DisplayClass1 {
   public int level;
@@ -28,13 +28,13 @@ private sealed class DisplayClass1 {
     return dev.Skill >= level;
   }
 }
-{% endhighlight %}
+```
 
 Один раз замкнувшись на параметр, мы продлеваем его срок жизни на неопределённый срок, поэтому все обращения к параметру внутри метода заменяются на обращение к полю closure-класса, инициализируемому в во время создания экземпляра closure-класса.
 
 В первом листинге кода можно обратить внимание на то, что требуется создавать экземпляр делегата для вызова `FilterBy()` на каждой итерации внешнего цикла. Однако реально все создаваемые делегаты будут замыкаться на одну и ту же переменную level и могут разделять между собой один и тот же closure-класс, а значит можно обойтись и одним экземпляром делегата. Компилятор C# обнаруживает данную ситуацию и генерирует следующий код:
 
-{% highlight C# %}
+```c#
 static void ShowDevelopersBySkill(IEnumerable<Team> teams, int level) {
   Func<Developer, bool> CachedAnonymousMethodDelegate1 = null;
   var closureLocal = new DisplayClass1();
@@ -49,7 +49,7 @@ static void ShowDevelopersBySkill(IEnumerable<Team> teams, int level) {
     team.ShowBy(CachedAnonymousMethodDelegate1);
   }
 }
-{% endhighlight %}
+```
 
 То есть все вызовы `FilterBy()` на каждой итерации цикла на самом деле разделяют один и тот же экземпляр делегата, создаваемый при первой итерации и сохраняемый в локальной переменной.
 

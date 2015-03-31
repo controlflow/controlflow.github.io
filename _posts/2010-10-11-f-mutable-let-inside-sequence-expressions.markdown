@@ -7,18 +7,18 @@ tags: fsharp seq ienumerable mutable sequence
 ---
 Наткнулся на интересные грабли в F# при попытке использовать изменяемые let-привязки внутри sequence expressions, данный код компилируется и работает:
 
-{% highlight fsharp %}
+```f#
 let xs = seq {
   yield 1
   let mutable x = 0
   x <- 2 // ok
   yield x
 }
-{% endhighlight %}
+```
 
 Однако если перенести присваивание подальше от определения let и убрать в цикл, то код перестаёт компилироваться:
 
-{% highlight fsharp %}
+```f#
 let ys = seq {
   yield 1
   let mutable x = 0
@@ -26,7 +26,7 @@ let ys = seq {
     x <- 2 // error FS0407!
     yield x
 }
-{% endhighlight %}
+```
 
 В ошибке компиляции говорится следующее:
 

@@ -11,23 +11,23 @@ tags: csharp delegate cache csc
 
 Интерес представляет поведение и генерируемый компилятором код, поэтому рассмотрим такой метод, содержащий лямбда-выражение:
 
-{% highlight C# %}
+```c#
 static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source) {
   return source.Where(x => x.IsDeveloper);
 }
-{% endhighlight %}
+```
 
 Эта запись для многих выглядит очень “натурально” и как-то совершенно забывается, что на самом деле здесь создаётся экземпляр типа делегата:
 
-{% highlight C# %}
+```c#
 static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source) {
   return source.Where(new Func<Person, bool>(x => x.IsDeveloper));
 }
-{% endhighlight %}
+```
 
 В данном примере лямбда-выражение не замыкается на какие-либо внешние переменные, this или поля, поэтому оно может быть (и будет) эффективно скомпилировано в виде обычного статического метода. Тогда возникает вопрос - зачем каждый раз создавать экземпляр делегата? Ведь делегаты в .NET являются неизменяемыми и несколько экземпляров делегатов на один и тот же *статический* метод абсолютно *взаимозаменяемы*. Компилятор C# использует это знание и применяет в данном случае кэширование экземпляра в статическом поле, реально скомпилированный код выглядит примерно вот так:
 
-{% highlight C# %}
+```c#
 [CompilerGenerated]
 static Func<Person, bool> CS9_CachedAnonymousMethodDelegate1;
 
@@ -39,7 +39,7 @@ static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source) {
                   new Func<Person, bool>(x => x.IsDeveloper)));
 }
 
-{% endhighlight %}
+```
 
 Данное кэширование применяется при создании экземпляров делегатов из любых статических методов, лямбда-выражение выше - лишь частный случай такого метода.
 

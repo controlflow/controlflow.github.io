@@ -7,7 +7,7 @@ tags: csharp dotnet remoting contextboundobject marshalbyrefobject inotifyproper
 ---
 Мне было нечего делать и к бесчисленному количеству вариантов удобной реализации классами интерфейса `System.ComponentModel.INotifyPropertyChanged` я набросал вариант с использованием такого загадочного класса .NET, как `System.ContextBoundObject`, являющегося наследником `System.MarshalByRefObject` и предоставляющего интерфейс для перехвата обращения к таким объектам. Реализация (прошу прощения за отсутствие комментариев):
 
-{% highlight C# %}
+```c#
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -135,7 +135,7 @@ static class Program {
     vm.Baz = "baz";
   }
 }}
-{% endhighlight %}
+```
 
 Тут есть интересные моменты:
 

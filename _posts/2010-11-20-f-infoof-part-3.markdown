@@ -9,7 +9,7 @@ tags: fsharp pattern-matching patterns infoof
 
 Сигнатура модуля:
 
-{% highlight fsharp %}
+```f#
 module MemberInfo
 
 open Microsoft.FSharp.Quotations
@@ -23,11 +23,11 @@ val methoddefof   : Expr -> MethodInfo
 val constructorof : Expr -> ConstructorInfo
 val unioncaseof   : Expr -> UnionCaseInfo
 val eventof       : Expr -> EventInfo
-{% endhighlight %}
+```
 
 Реализация модуля:
 
-{% highlight fsharp %}
+```f#
 module MemberInfo
 
 open Microsoft.FSharp.Quotations.Patterns
@@ -151,4 +151,4 @@ let unioncaseof expr =
     | NewUnionCase(info, _)
     | UnionCaseTest(_, info) -> info
     | _ -> failwith "Not a union case expression"
-{% endhighlight %}
+```
