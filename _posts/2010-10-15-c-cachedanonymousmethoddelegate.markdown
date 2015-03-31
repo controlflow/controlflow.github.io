@@ -12,24 +12,17 @@ tags: csharp delegate cache csc
 Интерес представляет поведение и генерируемый компилятором код, поэтому рассмотрим такой метод, содержащий лямбда-выражение:
 
 {% highlight C# %}
-public static IEnumerable<Person>
-	FilterDevelopers(this IEnumerable<Person> source)
-{
-	return source.Where(x => x.IsDeveloper);
+static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source) {
+  return source.Where(x => x.IsDeveloper);
 }
-
 {% endhighlight %}
 
 Эта запись для многих выглядит очень “натурально” и как-то совершенно забывается, что на самом деле здесь создаётся экземпляр типа делегата:
 
 {% highlight C# %}
-public static IEnumerable<Person>
-	FilterDevelopers(this IEnumerable<Person> source)
-{
-	return source.Where(
-		new Func<Person, bool>(x => x.IsDeveloper));
+static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source) {
+  return source.Where(new Func<Person, bool>(x => x.IsDeveloper));
 }
-
 {% endhighlight %}
 
 В данном примере лямбда-выражение не замыкается на какие-либо внешние переменные, this или поля, поэтому оно может быть (и будет) эффективно скомпилировано в виде обычного статического метода. Тогда возникает вопрос - зачем каждый раз создавать экземпляр делегата? Ведь делегаты в .NET являются неизменяемыми и несколько экземпляров делегатов на один и тот же *статический* метод абсолютно *взаимозаменяемы*. Компилятор C# использует это знание и применяет в данном случае кэширование экземпляра в статическом поле, реально скомпилированный код выглядит примерно вот так:
@@ -38,20 +31,18 @@ public static IEnumerable<Person>
 [CompilerGenerated]
 static Func<Person, bool> CS9_CachedAnonymousMethodDelegate1;
 
-public static IEnumerable<Person>
-	FilterDevelopers(this IEnumerable<Person> source)
-{
-	return source.Where(
-		CS9_CachedAnonymousMethodDelegate1 != null
-			? (CS9_CachedAnonymousMethodDelegate1)
-			: (CS9_CachedAnonymousMethodDelegate1
-				= new Func<Person, bool>(x => x.IsDeveloper)));
+static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source) {
+  return source.Where(
+    CS9_CachedAnonymousMethodDelegate1 != null
+      ? CS9_CachedAnonymousMethodDelegate1
+      : (CS9_CachedAnonymousMethodDelegate1 =
+                  new Func<Person, bool>(x => x.IsDeveloper)));
 }
 
 {% endhighlight %}
 
 Данное кэширование применяется при создании экземпляров делегатов из любых статических методов, лямбда-выражение выше - лишь частный случай такого метода.
 
-Долгое время я считал, что в случае появления любого замыкания, кэширование становится неприменимо (экземпляры делегатов из лямбда-выражений/анонимных методов, замыкающихся на внешний контекст, не являются взаимозаменяемыми). Однако оказалось, что статические методы - не единственный случай кэширования, подробнее - в следующих постах ;))
+Долгое время я считал, что в случае появления любого замыкания, кэширование становится неприменимо (экземпляры делегатов из лямбда-выражений/анонимных методов, замыкающихся на внешний контекст, не являются взаимозаменяемыми). Однако оказалось, что статические методы - не единственный случай кэширования, подробнее - в следующих постах.
 
-Важно помнить, что описанное кэширование - это implementation detail компилятора в чистом виде, ни в коем случае нельзя строить логику на описанных выше эффектах (ссылочное равенство создаваемых делегатов), хотя это может открыть некоторые забавные возможности… Но об этом позже ;))
+Важно помнить, что описанное кэширование - это implementation detail компилятора в чистом виде, ни в коем случае нельзя строить логику на описанных выше эффектах (ссылочное равенство создаваемых делегатов), хотя это может открыть некоторые забавные возможности…

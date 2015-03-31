@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "F# [&lt;RequiredQualifiedAccessAttribute&gt;]"
+title: "F# RequiredQualifiedAccessAttribute"
 date: 2010-10-12 00:35:49
 categories: 1293858726
 ---

@@ -22,7 +22,7 @@ sizeof(int)         =>  sizeof<int>
 
 Стоит отметить, что в C# введён специальный синтаксис для получения generic type definition (открытого generic-типа) – надо вовсе не указывать все типы-параметры, например: `Action<>` или `Dictionary<,>`. Однако в F# явные типы-параметры надо указывать всегда (отдельного синтаксиса не предусмотрено), поэтому для получения generic type definition следует пользоваться отдельным значением `typedefof<T>`, в качестве `T` указав *generic-тип с любыми возможными конкретными типами-параметрами*. Иногда можно применить небольшой приём для улучшения читаемости кода: указать в качестве типов-параметров `_` – тогда вывод типов автоматически выведет соответствующие типы-параметры в тип `obj` (как в примере выше).
 
-Так вот, подобные let-привязки значений (то есть не имеющие аргументов), параметризированных типами, в F# называются *«type functions»*. В стандартной библиотеке F# есть ещё несколько примеров type functions, которые Вы наверняка уже замечали:
+Так вот, подобные `let`-привязки значений (то есть не имеющие аргументов), параметризированных типами, в F# называются *«type functions»*. В стандартной библиотеке F# есть ещё несколько примеров type functions, которые Вы наверняка уже замечали:
 
 {% highlight fsharp %}
 List.empty
@@ -40,15 +40,19 @@ Map.empty
 Предупреждаю сразу, что определение собственных type function в F# – очень редкое занятие в программировании на F#. Определить type function очень легко – надо всего лишь добавить явное перечисление типов-параметров для let-привязки значения:
 
 {% highlight fsharp %}
-/// Список иерархии классов для типа 'T
+// Список иерархии классов для типа 'T
 let typeHierarchy<'T> =
-    let rec loop ts (t: System.Type) =
-        if t = null then ts
-                    else loop (t::ts) t.BaseType
-    loop [] typeof<'T>
+  let rec loop ts (t: System.Type) =
+    if t = null then ts
+                else loop (t::ts) t.BaseType
+  loop [] typeof<'T>
+{% endhighlight %}
 
-> typeHierarchy<System.IO.FileStream>
-  |> List.map (fun t -> t.Name);;
+Использование:
+
+{% highlight fsharp %}
+typeHierarchy<System.IO.FileStream>
+ |> List.map (fun t -> t.Name);;
 
 val it : string list =
   ["Object"; "MarshalByRefObject"; "Stream"; "FileStream"]
@@ -60,8 +64,8 @@ val it : string list =
 
 {% highlight fsharp %}
 type Foo =
-     member this.ServicesOfType<'T>(name: string) =
-        ...
+   member this.ServicesOfType<'T>(name: string) =
+     ...
 
 Foo.ServicesOfType() // компилируется, но 'T = obj!
 {% endhighlight %}
@@ -72,22 +76,20 @@ Foo.ServicesOfType() // компилируется, но 'T = obj!
 let myEmptyList<'a> = List.empty<'a>
 
 let func() =
-    let empty = myEmptyList
-    (1 :: empty, "a" :: empty) // error
+  let empty = myEmptyList
+  (1 :: empty, "a" :: empty) // error
 {% endhighlight %}
 
 Получаем ошибку следующего содержания:
 
-<blockquote>
-Type mismatch. Expecting a string list but given a int list. The type ‘string’ does not match the type ‘int’.
+> Type mismatch. Expecting a string list but given a int list. The type ‘string’ does not match the type ‘int’.
 
-</blockquote>
 То есть значение empty невозможно использовать как полиморфное, как список различного типа в нескольких выражениях. Дело в том, что type значение function по умолчанию не подвергается *автоматическому обобщению* (automatic generalization) F#, как функции, например:
 
 {% highlight fsharp %}
 let func() =
-    let empty() = myEmptyList
-    (1 :: empty(), "a" :: empty()) // fine
+  let empty() = myEmptyList
+  (1 :: empty(), "a" :: empty()) // fine
 {% endhighlight %}
 
 Как раз для решения данной проблемы применяется атрибут `[<GeneralizableValue>]`. После аннотации type function данным атрибутом, значение начинает рассматриваться как полиморфное и принимать участие в автоматическом обобщении:
@@ -97,8 +99,8 @@ let func() =
 let myEmptyList<'a> = List.empty<'a>
 
 let func() =
-    let empty = myEmptyList
-    (1 :: empty, "a" :: empty) // fine
+  let empty = myEmptyList
+  (1 :: empty, "a" :: empty) // fine
 {% endhighlight %}
 
 Обычно type function следует обязательно отмечать либо атрибутом `[<GeneralizableValue>]`, либо `[<RequiresExplicitTypeArguments>]`, в зависимости от сценария использования.
@@ -112,6 +114,4 @@ zeroRef := 1
 printfn "%A" zeroRef // {contents = 0;}
 {% endhighlight %}
 
-Рекомендую определять свои type functions только убедившись, что вычисление не имеет видимых сторонних эффектов и является хорошим претендентом на то, чтобы рассматривать его как значение, параметризованное типом. Ну и понимая, что оно вам действительно надо, конечно =)))
-
-p.s. если я накосячил в размышлениях про полиморфизм и автоматическое обобщение, то я буду очень рад, если вы свяжетесь со мной и поправите :)
+Рекомендую определять свои type functions только убедившись, что вычисление не имеет видимых сторонних эффектов и является хорошим претендентом на то, чтобы рассматривать его как значение, параметризованное типом. Ну и понимая, что оно вам действительно надо, конечно.

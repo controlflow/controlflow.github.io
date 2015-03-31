@@ -6,8 +6,8 @@
     @extend %vertical-rhythm;
 
     .c     { color: #AAA } // Comment
-    .err   { color: #a61717; background-color: #e3d2d2 } // Error
-    .k     { color: #6060B0; } // Keyword
+    .err   { color: #a61717 } // Error
+    .k     { color: #6060B0 } // Keyword
     .o     { } // Operator
     .cm    { color: #AAA } // Comment.Multiline
     .cp    { color: #AAA } // Comment.Preproc
