@@ -11,4 +11,8 @@ twitter_username: controlflow
 github_username:  controlflow
 
 # Build settings
-markdown: kramdown
+# markdown: kramdown
+markdown: redcarpet
+
+redcarpet:
+  extensions: ["strikethrough"]

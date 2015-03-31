@@ -25,9 +25,9 @@ ys.[0] <- new obj()
 
 {% highlight fsharp %}
 type Foo =
-     // метод с byref-параметром
-     static member Bar(x: obj byref) =
-          x <- new obj()
+  // метод с byref-параметром
+  static member Bar(x: obj byref) =
+    x <- new obj()
 
 Foo.Bar(&ys.[0]) // буууух!
 {% endhighlight %}
@@ -41,46 +41,46 @@ Foo.Bar(&ys.[0]) // буууух!
 /// некую ячейку хранения значения типа 'a
 [<Struct>]
 type Holder<'a> =
-     new x = { Value = x }   // конструктор
-     val mutable Value: 'a   // изменяемая ячейка
+  new x = { Value = x }   // конструктор
+  val mutable Value: 'a   // изменяемая ячейка
 
 // и произвольное значение ссылочного типа
 let ref_value = "abc"
 
 Measure.run [ // тестирование скорости записи
 
-    "запись элементов в массив",
-    fun () -> let xs = Array.zeroCreate 1
-              for i = 0 to 100000 do
-                  xs.[0] <- ref_value
+  "запись элементов в массив",
+  fun () -> let xs = Array.zeroCreate 1
+            for i = 0 to 100000 do
+                xs.[0] <- ref_value
 
-    "запись обёрнутых элементов",
-    fun () -> let xs = Array.zeroCreate 1
-              for i = 0 to 100000 do
-                  xs.[0] <- Holder ref_value
+  "запись обёрнутых элементов",
+  fun () -> let xs = Array.zeroCreate 1
+            for i = 0 to 100000 do
+                xs.[0] <- Holder ref_value
 ]
 
 Measure.run [ // тестирование скорости чтения
 
-    "чтение элементов в массива",
-    fun () -> let xs = [| "abc" |]
-              for i = 0 to 100000 do
-                  ignore xs.[0]
+  "чтение элементов в массива",
+  fun () -> let xs = [| "abc" |]
+            for i = 0 to 100000 do
+                ignore xs.[0]
 
-    "чтение обёрнутых элементов",
-    fun () -> let xs = [| Holder "abc" |]
-              for i = 0 to 100000 do
-                  ignore xs.[0].Value
+  "чтение обёрнутых элементов",
+  fun () -> let xs = [| Holder "abc" |]
+            for i = 0 to 100000 do
+                ignore xs.[0].Value
 ]
 {% endhighlight %}
 
 Результаты (у меня Core i3 380M @ 2533 Mhz), запись:
 
-![](http://media.tumblr.com/tumblr_ljsv6uemyw1qdrm28.png)
+![]({{ site.baseurl }}/images/array-covariance.png)
 
 Чтение:
 
-![](http://media.tumblr.com/tumblr_ljsx9qTvS71qdrm28.png)
+![]({{ site.baseurl }}/images/array-covariance2.png)
 
 Оверхэд небольшой, конечно же, особенно с учётом того, что запись элемента массива сама по себе ооочень быстра. Однако в масштабах рантайма и фрэймворка, замедление в 1.5-2 раза всё же играет роль. Интересно, что проверка может быть устранена для массивов `sealed`-типов, однако на практике этого не происходит.
 
@@ -90,4 +90,4 @@ Measure.run [ // тестирование скорости чтения
 
 Результаты Mono 2.10 for Windows немного отличаются (обратите внимание на заметно меньшее количество итераций):
 
-![](http://media.tumblr.com/tumblr_ljv75pFXVe1qdrm28.png)
+![]({{ site.baseurl }}/images/array-covariance3.png)
