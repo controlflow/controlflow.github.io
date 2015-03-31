@@ -17,7 +17,8 @@ tags: csharp ilmerge assembly msbuild assemblyresolve
 
 Выгружаем проект консольного приложения (действие *Unload Project* контекстного меню) и открываем .csproj-файл для редактирования. В файле проекта нам следует добавить ссылку на embedded-ресурс (dll-файл библиотеки) и указать полное имя сборки в качестве имени ресурса:
 
-<pre class="brush: xml">  <!-- ... -->
+{% highlight xml %}
+  <!-- ... -->
 
   <ItemGroup>
     <ProjectReference Include="ClassLib\ClassLib.csproj">
@@ -41,8 +42,6 @@ tags: csharp ilmerge assembly msbuild assemblyresolve
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 
   <!-- ... -->
-
-</Project>
 {% endhighlight %}
 
 Это всё равно не очень приятно выглядит: приходится указывать полное имя сборки, завязываться на output-пути другого проекта и тот факт, что названия конфигурации обоих проектов (доступные через выражение `$(Configuration)`) должны совпадать. Однако некоторую автоматизацию данный подход всё же осуществляет (изменения проекта *Class Library* будут автоматически переносится в embedded-ресурс консольного приложения), а если глубже погрузиться в MsBuild, то можно устранить эти недостатки, например, получая полное имя сборки автоматически с помощью задачи `[GetAssemblyIdentity](http://msdn.microsoft.com/en-us/library/ms164296.aspx)`.

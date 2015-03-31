@@ -14,7 +14,6 @@ let xs = seq {
     x <- 2 // ok
     yield x
 }
-
 {% endhighlight %}
 
 Однако если перенести присваивание подальше от определения let и убрать в цикл, то код перестаёт компилироваться:
@@ -27,16 +26,16 @@ let ys = seq {
           x <- 2 // error FS0407!
           yield x
 }
-
 {% endhighlight %}
 
 В ошибке компиляции говорится следующее:
 
-<blockquote>
-<pre class="box">`error FS0407:`<br/>The mutable variable 'x' is used in an invalid way. Mutable<br/>variables cannot be captured by closures. Consider eliminating<br/>this use of mutation or using a heap-allocated mutable<br/>reference cell via 'ref' and '!'.<br/>
-{% endhighlight %}
+> `error FS0407:`
+> The mutable variable 'x' is used in an invalid way. Mutable
+> variables cannot be captured by closures. Consider eliminating
+> this use of mutation or using a heap-allocated mutable
+> reference cell via 'ref' and '!'.
 
-</blockquote>
 Возникает вопрос: о каком захвате в замыкание идёт речь в сообщении об ошибке? Думаю, подобное описание выглядит как-то очень неадекватно, особенно для людей, не знакомых глубоко с устройством sequence expression или итераторов C#.
 
 А что касается причины такого поведения, то дело заключается в том, что выражение присваивание во втором примере попадает в состояние sequence expression’а, отличное от того, в котором была определена изменяемая let-привязка. То есть в другой case генерируемого для `MoveNext()` блока switch’а, нежели в котором изменяемая let-привязка инициализируется нулём.

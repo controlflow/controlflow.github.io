@@ -87,7 +87,7 @@ div.highlight {
     }
 }
 
-@include media-query($palm) {
+@include media-query($on-palm) {
     div.highlight {
         margin-left: 0;
         margin-right: 0;
@@ -132,11 +132,6 @@ pre {
     }
 }
 
-
-
-/**
- * Wrapper
- */
 .wrapper {
     max-width: -webkit-calc(800px - (#{$spacing-unit} * 2));
     max-width:         calc(800px - (#{$spacing-unit} * 2));
@@ -154,13 +149,7 @@ pre {
     }
 }
 
-
-
-/**
- * Clearfix
- */
 %clearfix {
-
     &:after {
         content: "";
         display: table;
@@ -168,13 +157,7 @@ pre {
     }
 }
 
-
-
-/**
- * Icons
- */
 .icon {
-
     > svg {
         display: inline-block;
         width: 16px;

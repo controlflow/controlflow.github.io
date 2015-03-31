@@ -69,7 +69,8 @@ class Program {
 
 То вывод будет следующим:
 
-<pre>cas: assembly level
+```
+cas: assembly level
 cas: type level
 cas: type level
 cas: constructor level
@@ -77,8 +78,8 @@ type initializer
 cas: type level
 cas: type level
 cas: method level
-entry point<br/>
-{% endhighlight %}
+entry point
+```
 
 Отдельная сборка нужна из-за того, что CAS-атрибут уровня сборки требует, чтобы сборка с типом данного атрибута могла быть полностью загружена в момент проверки прав. Проверка уровня типа случается дважды из-за того, что вызов метода требует два права - на обращение к типу и на обращение к конкретному методу, однако обращение к методу возможно только если вызывающая сторона имеет право на доступ к типу.
 
@@ -172,7 +173,8 @@ public class FooDomainManager : AppDomainManager {
 
 Далее различными можно указать данный менеджер для использования в файле `App.config` любого приложения (эта возможность доступна только начиная с .NET 4.0) следующим образом:
 
-<pre class="brush: xml"><?xml version="1.0"?>
+{% highlight xml %}
+<?xml version="1.0"?>
 <configuration>
   <runtime>
     <!-- полное имя сборки с AppDomainManager'ом -->
