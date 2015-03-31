@@ -115,10 +115,9 @@ var covariantReturnType = (Func<int, object>) Delegate.CreateDelegate(
 Тут всё становится интереснее, так как C# не позволяет создавать такие делегаты статически. Дело в том, что если не указывать экземпляр через параметр `firstArgument` и подобрать тип делегата таковым, чтобы первый аргумент делегата был ссылочного типа, определяющего данный метод, то можно создать экземпляр делегата так, как если бы метод экземпляра был статическим:
 
 {% highlight C# %}
-var instanceBarAsStatic = (Func<FooClass, int, string>)
-  Delegate.CreateDelegate(
-    type:   typeof(Func<FooClass /* <== */, int, string>),
-    method: typeof(FooClass).GetMethod("InstanceBar"));
+var instanceBarAsStatic = (Func<FooClass, int, string>) Delegate.CreateDelegate(
+  type:   typeof(Func<FooClass /* <== */, int, string>),
+  method: typeof(FooClass).GetMethod("InstanceBar"));
 {% endhighlight %}
 
 А затем вызывать делегат для различных экземпляров:
