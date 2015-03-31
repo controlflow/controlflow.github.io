@@ -7,7 +7,7 @@ tags: fsharp seq ienumerable dispose finally
 ---
 Нашёл занятный баг в F# 2.0:
 
-```f#
+```fsharp
 let xs = seq {
   try yield 1
     yield! seq {

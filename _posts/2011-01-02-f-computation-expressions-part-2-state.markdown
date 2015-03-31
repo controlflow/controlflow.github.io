@@ -9,7 +9,7 @@ tags: fsharp computation expressions monads state
 
 В качестве типа вычислений `M<’a>` будем использовать собственный тип-объединение `State<’a,’state>`, просто оборачивающий функции типа `'state -> 'a * 'state`. Дополнительно определяем модуль `State` для частых операций с состоянием и функции `run` для запуска вычисления. Сигнатура:
 
-```f#
+```fsharp
 namespace FSharp.Monads
 
 type State<'a, 'state> =
@@ -32,7 +32,7 @@ type StateBuilder =
 
 Реализация:
 
-```f#
+```fsharp
 namespace FSharp.Monads
 
 type State<'a, 'state> =
@@ -73,7 +73,7 @@ int GCD(int x, int y) {
 
 Так как изменяемое состояние здесь составляют две переменные `x` и `y`, то в качестве типа `'state` будет выступать кортеж типа `int * int`.
 
-```f#
+```fsharp
 open FSharp.Monads
 #nowarn "40"
 
@@ -98,7 +98,7 @@ printfn "gcd(6, 21) = %d" x
 
 Вариант “без сахара”:
 
-```f#
+```fsharp
 /// Алгоритм Евклида
 let rec gcd' =
   state.Bind(

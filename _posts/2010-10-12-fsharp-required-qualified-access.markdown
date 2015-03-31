@@ -6,7 +6,7 @@ categories: 1293858726
 ---
 Наверняка многие видели в F# атрибут `[<RequiredQualifiedAccess>]` или натыкались на невозможность открытия модулей `Seq`, `List` и некоторых других с помощью ключевого слова `open`. К примеру, в случае такого определения модуля:
 
-```f#
+```fsharp
 [<RequireQualifiedAccess>]
 module Some =
     let foo x = (+) "foo"
@@ -19,7 +19,7 @@ module Some =
 
 Использовать его содержимое можно только следующим образом:
 
-```f#
+```fsharp
 let foo = Some.foo "bar"
 let bar = Some.(==>) 1
 
@@ -33,7 +33,7 @@ let p = { Some.name = "Ben"
 
 Обратите внимание, что использовать операторы в инфиксной форме становится невозможно. Однако не все знают, что атрибут `[<RequiredQualifiedAccess>]` можно применять к *record* и *union*-типам F#:
 
-```f#
+```fsharp
 [<RequireQualifiedAccess>]
 type Character = A | B | C
 
@@ -43,7 +43,7 @@ type Person = { name : string; age : int }
 
 И использовать, явно указывая имя типа, к которому относится union case или record field:
 
-```f#
+```fsharp
 let c = Character.A
 let p = { Person.name = "Ben"
           Person.age  =  21   }

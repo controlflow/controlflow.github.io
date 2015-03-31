@@ -18,22 +18,22 @@ tags: fsharp fprog computation expressions builders lists arrays list comprehens
 
 Оказывается, что можно. В этом нам поможет тот факт, что ключевое слово `inline` в F# позволяет определять не только встраиваемые `let`-определения, но и `member`-декларации. Определяя методы builder-класса как `inline`, можно устранить множество лямбда-выражений (но не все) и получить генерацию практически императивного код формирования списка/массива безо всякой отложенности. Сначала я реализовал `[| |]`, используя обычный класс `List<’T>` из состава .NET Framework:
 
-```f#
+```fsharp
 type FastArrayBuilder<'a>() =
-     inherit System.Collections.Generic.List<'a>()
+  inherit System.Collections.Generic.List<'a>()
 
 type FastArrayBuilder<'a> with
-     member inline arr.Yield(x)       = arr.Add(x)
-     member inline arr.YieldFrom(xs)  = arr.AddRange(xs)
-     member inline arr.Run(f)         = f(); arr.ToArray()
-     member inline arr.Combine((), f) = f()
-     member inline arr.Delay(f)       = f
-     member inline arr.Zero()         = ()
-     member inline arr.For(seq, f)    = for x in seq do f x
-     member inline arr.Using(expr, f) = use e = expr in f e
-     member inline arr.While(cond, f) = while cond() do f()
-     member inline arr.TryWith(t, f)  = try t() with e -> f()
-     member inline arr.TryFinally(t, f) = try t() finally f()
+  member inline arr.Yield(x)       = arr.Add(x)
+  member inline arr.YieldFrom(xs)  = arr.AddRange(xs)
+  member inline arr.Run(f)         = f(); arr.ToArray()
+  member inline arr.Combine((), f) = f()
+  member inline arr.Delay(f)       = f
+  member inline arr.Zero()         = ()
+  member inline arr.For(seq, f)    = for x in seq do f x
+  member inline arr.Using(expr, f) = use e = expr in f e
+  member inline arr.While(cond, f) = while cond() do f()
+  member inline arr.TryWith(t, f)  = try t() with e -> f()
+  member inline arr.TryFinally(t, f) = try t() finally f()
 
 let inline fastarray<'a> = FastArrayBuilder<'a>()
 ```
@@ -42,38 +42,38 @@ let inline fastarray<'a> = FastArrayBuilder<'a>()
 
 Давайте сравним производительность в “полевых” условиях, генерируя массивы достаточно сложным выражением (к сожалению, дублирование кода тут избежать не удастся):
 
-```f#
+```fsharp
 Measure.run [
 
   "[| |]", fun() ->
     [|
-        yield 1; yield 2; yield! {3 .. 4}
-        let x1 = 123
-        try for i = 1 to 10 do
-                if i < 5 then yield i
-                              yield! [ x1 ]
-                else yield! [| 1; 2; i |]
-            yield 777
-        finally ()
-        for i in 0 .. 10 do
-            if i % 2 = 0 then yield! [1]
-        yield 99
+      yield 1; yield 2; yield! {3 .. 4}
+      let x1 = 123
+      try for i = 1 to 10 do
+            if i < 5 then yield i
+                          yield! [ x1 ]
+            else yield! [| 1; 2; i |]
+          yield 777
+      finally ()
+      for i in 0 .. 10 do
+        if i % 2 = 0 then yield! [1]
+      yield 99
     |]
     |> ignore
 
   "fastarray { }", fun() ->
     fastarray {
-        yield 1; yield 2; yield! {3 .. 4}
-        let x1 = 123
-        try for i = 1 to 10 do
-                if i < 5 then yield i
-                              yield! [ x1 ]
-                else yield! [| 1; 2; i |]
-            yield 777
-        finally ()
-        for i in 0 .. 10 do
-            if i % 2 = 0 then yield! [1]
-        yield 99
+      yield 1; yield 2; yield! {3 .. 4}
+      let x1 = 123
+      try for i = 1 to 10 do
+            if i < 5 then yield i
+                          yield! [ x1 ]
+            else yield! [| 1; 2; i |]
+          yield 777
+      finally ()
+      for i in 0 .. 10 do
+        if i % 2 = 0 then yield! [1]
+      yield 99
     }
     |> ignore
 ]
@@ -81,69 +81,69 @@ Measure.run [
 
 Результаты получились следующими (на разных выражениях я получал прирост от 1.5 до 3 раз по сравнению с `[| |]`-выражениями), обратите внимание на количество сборок мусора (последний столбец):
 
-![](http://media.tumblr.com/tumblr_ljwhr6nbzc1qdrm28.png)
+![]({{ site.baseurl }}/images/fsharp-array-seq.png)
 
 Окей, что насчёт такой основы F#, как списки? `[]`-выражения тоже базируются на `seq { }`, попробуем написать замену:
 
-```f#
+```fsharp
 [<Struct>]
 type FastListBuilder<'a> =
-     new _ = { tail = [] }
-     val mutable tail : 'a list
+  new _ = { tail = [] }
+  val mutable tail : 'a list
 
-     member inline list.Yield(x) =
-            list.tail <- x :: list.tail
-     member inline list.YieldFrom(xs) =
-            for x in xs do list.tail <- x :: list.tail
-     member inline list.Run(f) =
-            f(); List.rev list.tail
+  member inline list.Yield(x) =
+    list.tail <- x :: list.tail
+  member inline list.YieldFrom(xs) =
+    for x in xs do list.tail <- x :: list.tail
+  member inline list.Run(f) =
+    f(); List.rev list.tail
 
-     member inline list.Combine((), f) = f()
-     member inline list.Delay(f)       = f
-     member inline list.Zero()         = ()
-     member inline list.For(seq, f)    = for x in seq do f x
-     member inline list.Using(expr, f) = use e = expr in f e
-     member inline list.While(cond, f) = while cond() do f()
-     member inline list.TryWith(t, f)  = try t() with e -> f()
-     member inline list.TryFinally(t, f) = try t() finally f()
+  member inline list.Combine((), f) = f()
+  member inline list.Delay(f)       = f
+  member inline list.Zero()         = ()
+  member inline list.For(seq, f)    = for x in seq do f x
+  member inline list.Using(expr, f) = use e = expr in f e
+  member inline list.While(cond, f) = while cond() do f()
+  member inline list.TryWith(t, f)  = try t() with e -> f()
+  member inline list.TryFinally(t, f) = try t() finally f()
 
 let inline fastlist<'a> = FastListBuilder<'a>(1)
 ```
 
 Реализация существенно отличается от приведенной ранее. Теперь для builder’а используется значимый тип (меньше indirections), который хранит изменяемую ссылку на конец собранного списка, которую подменяет каждые `yield` и `yield!`. К сожалению, список собирается в обратном порядке, поэтому при запуске выражения его приходится переворачивать (если бы это был код стандартной библиотеки F#, то можно было бы мутировать список и собирать его в нужном порядке, но в пользовательском коде такой возможности нет). Тест:
 
-```f#
+```fsharp
 Measure.run [
 
   "[ ]", fun() ->
     [
-        yield 1; yield 2; yield! {3 .. 4}
-        let x1 = 123
-        try for i = 1 to 10 do
-                if i < 5 then yield i
-                              yield! [ x1 ]
-                else yield! [| 1; 2; i |]
-            yield 777
-        finally ()
-        for i in 0 .. 10 do
-            if i % 2 = 0 then yield! [1]
-        yield 99
+      yield 1; yield 2; yield! {3 .. 4}
+      let x1 = 123
+      try for i = 1 to 10 do
+            if i < 5 then yield i
+                          yield! [ x1 ]
+            else yield! [| 1; 2; i |]
+          yield 777
+      finally ()
+      for i in 0 .. 10 do
+        if i % 2 = 0 then yield! [1]
+      yield 99
     ]
     |> ignore
 
   "fastlist { }", fun() ->
     fastlist {
-        yield 1; yield 2; yield! {3 .. 4}
-        let x1 = 123
-        try for i = 1 to 10 do
-                if i < 5 then yield i
-                              yield! [ x1 ]
-                else yield! [| 1; 2; i |]
-            yield 777
-        finally ()
-        for i in 0 .. 10 do
-            if i % 2 = 0 then yield! [1]
-        yield 99
+      yield 1; yield 2; yield! {3 .. 4}
+      let x1 = 123
+      try for i = 1 to 10 do
+            if i < 5 then yield i
+                          yield! [ x1 ]
+            else yield! [| 1; 2; i |]
+          yield 777
+      finally ()
+      for i in 0 .. 10 do
+        if i % 2 = 0 then yield! [1]
+      yield 99
     }
     |> ignore
 ]
@@ -151,7 +151,7 @@ Measure.run [
 
 Не смотря на разворот списка, результаты радуют (более чем в 2 раза меньше сборок мусора в первом поколении):
 
-![](http://media.tumblr.com/tumblr_ljwhtysYtT1qdrm28.png)
+![]({{ site.baseurl }}/images/fsharp-array-seq2.png)
 
 Если вам кажется, что выигрыш не оправдан, то задумайтесь - неизменяемые списки - это основа функционального языка, которым является F#. Такие фундаментальные возможности языка, как генераторы списков, просто обязаны работать настолько быстро, насколько это возможно.
 

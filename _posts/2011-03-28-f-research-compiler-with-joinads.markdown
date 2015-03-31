@@ -11,7 +11,7 @@ tags: fsharp joinads expreremental compiler computation expressions monads
 
 Например, так выглядит код использования джоинады `future`, запускающий несколько параллельных задач и ожидающих их результатов:
 
-```f#
+```fsharp
 let parallelOr = future {
   match! (after 1000 true), (after 100 true) with
   | !true, _ -> return true

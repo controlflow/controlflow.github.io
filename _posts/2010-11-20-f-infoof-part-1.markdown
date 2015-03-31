@@ -9,7 +9,7 @@ tags: fsharp infoof quotations patterns pattern-matching
 
 Давайте попробуем описать простую функцию, получающую процитированное выражение F# и возвращающую объект типа `System.Reflection.PropertyInfo` в случае, если переданное выражение является выражением доступа к свойству:
 
-```f#
+```fsharp
 open Microsoft.FSharp.Quotations.Patterns
 
 let propertyof expr =
@@ -20,7 +20,7 @@ let propertyof expr =
 
 Всё, что делает данная функция – использует «активный образец» (или «активный шаблон», *active pattern*) из модуля `Microsoft.FSharp.Quotations.Patterns` для попытки извлечения выражения доступа к свойству. Функцию легко использовать для получения `PropertyInfo` статических свойств и свойств различных переменных и литералов, доступных в контексте вызова `propertyof`:
 
-```f#
+```fsharp
 propertyof<@ (null : string).Length @>
 
 val it : System.Reflection.PropertyInfo =
@@ -42,7 +42,7 @@ val it : System.Reflection.PropertyInfo =
 
 Однако функцией будет сложно воспользоваться, если надо будет получить `PropertyInfo` уровня экземпляра, не имея самого экземпляра класса. Чтобы решить данную проблему, можно позволить помимо выражения доступа к свойству, передавать лямбда-выражение, состоящие из выражения доступа к свойству через параметр лямбды:
 
-```f#
+```fsharp
 <@ fun(s: string) -> s.Length @>
 
 val it : Quotations.Expr<(string -> int)> =
@@ -51,7 +51,7 @@ val it : Quotations.Expr<(string -> int)> =
 
 Новая версия функции `propertyof` принимает вид:
 
-```f#
+```fsharp
 let propertyof expr =
   match expr with
     | PropertyGet(_, info, _) -> info
@@ -64,7 +64,7 @@ let propertyof expr =
 
 Ок, давайте попробуем ещё один вариант выражения, доступа к свойству необычного литерала (`123I` – это числовой литерал типа `BigInteger` в F#):
 
-```f#
+```fsharp
 propertyof<@ 123I.IsZero @>
 
 System.Exception: Not a property expression
@@ -74,7 +74,7 @@ System.Exception: Not a property expression
 
 Хм, как же на самом деле цитируется данное выражение?
 
-```f#
+```fsharp
 <@ 123I.IsOne @>
 
 val it : Quotations.Expr<bool> =
@@ -85,7 +85,7 @@ val it : Quotations.Expr<bool> =
 
 То есть на самом деле F# создаёт `let`-биндинг, инициализирует его конструктором `BigInteger` и затем осуществляет обращение к свойству данного биндинга, то есть выражение `123I.IsOne` цитируется как `let copyOfStruct = 123I in copyOfStruct.IsOne`. Добавим образец, совпадающий и с такими выражениями, функция примет вид:
 
-```f#
+```fsharp
 let propertyof expr =
   match expr with
     | PropertyGet(_, info, _) -> info
@@ -97,7 +97,7 @@ let propertyof expr =
 
 Обратите внимание, что я объединил два образца через *ИЛИ-шаблон* `|` (ещё пример: `match x with 1 | 2 | 3 -> true | _ -> false`), так как оба образца содержат одинаковый набор имён для совпадений (`arg`, `var`, `info`) соответственно идентичных типов. Обратите внимание, что ограничивающее `when`-выражение тут действует на оба возможных совпадения *ИЛИ-шаблона*. Проверяем работоспособность:
 
-```f#
+```fsharp
 [ propertyof<@ System.Console.Out @>
   propertyof<@ (null: Type).IsClass @>
   propertyof<@ "someStringLiteral".Length @>

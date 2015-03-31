@@ -11,7 +11,7 @@ tags: fsharp computation expressions monads maybe option
 
 Начнём с монады `maybe`, а в качестве типа вычисления `M<’a>` будем использовать тип `Option<’a>` из стандартной библиотеки F#. Сигнатура:
 
-```f#
+```fsharp
 namespace FSharp.Monads
 
 type MaybeBuilder =
@@ -24,7 +24,7 @@ type MaybeBuilder =
 
 Реализация:
 
-```f#
+```fsharp
 namespace FSharp.Monads
 
 type MaybeBuilder() =
@@ -38,7 +38,7 @@ type MaybeBuilder() =
 
 В качестве пример использования, можно привести программу, которая ожидает ввод пользователем целого числа и пытается найти порядковый номер введённого числа в последовательности простых чисел, при этом в случае не числового ввода или ввода числа, не являющегося простым, программа останавливается и возвращает `None`:
 
-```f#
+```fsharp
 open System
 open FSharp.Monads
 
@@ -76,7 +76,7 @@ match tryInputPrime() with
 
 Вот как выглядит функция `inputInt32` “без сахара”, обратите внимание на вызов метода `Zero()`:
 
-```f#
+```fsharp
 /// Попытка считывания с консоли целого числа
 let inputInt32'() =
   let str = Console.ReadLine()
@@ -88,7 +88,7 @@ let inputInt32'() =
 
 А вот и вся “поднаготная” функции `tryInputPrime`:
 
-```f#
+```fsharp
 /// Попытка считывания с консоли простого числа
 let tryInputPrime'() =
   printfn "введите простое число от 2 до 100:"

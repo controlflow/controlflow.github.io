@@ -9,7 +9,7 @@ tags: fsharp monads computation expressions cont async callcc
 
 Итак, сигнатура:
 
-```f#
+```fsharp
 namespace FSharp.Monads
 
 type Cont<'a, 'result> =
@@ -30,7 +30,7 @@ type ContBuilder =
 
 Реализация:
 
-```f#
+```fsharp
 namespace FSharp.Monads
 
 type Cont<'a, 'result> =
@@ -54,7 +54,7 @@ type ContBuilder() =
 
 В качестве примера использования перепишем на F# [хрестоматийный пример](http://hackage.haskell.org/packages/archive/mtl/2.0.0.0/doc/html/Control-Monad-Cont.html) использования монады `cont` вместе с функцией `callCC`. Функция осуществляет проверку строки с именем пользователя и осуществляет немедленный выход в случае указания пустого имени - с помощью вызова функции `exit` внутри `Cont<_,_>`-вычисления, переданного в `callCC`:
 
-```f#
+```fsharp
 open FSharp.Monads
 
 let cont = ContBuilder()
@@ -80,7 +80,7 @@ whatsYourName "Alex"
 
 Функция `validateName` разворачивается компилятором следующим образом:
 
-```f#
+```fsharp
 /// Проверка строки имени на пустоту
 let validateName' name exit =
   if System.String.IsNullOrEmpty name
@@ -90,7 +90,7 @@ let validateName' name exit =
 
 Функция `whatsYourName` выглядит немного сложнее:
 
-```f#
+```fsharp
 /// Проверка имени пользователя
 let whatsYourName' name =
   Cont.run

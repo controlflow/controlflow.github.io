@@ -9,7 +9,7 @@ tags: fsharp pattern-matching patterns infoof
 
 Сигнатура модуля:
 
-```f#
+```fsharp
 module MemberInfo
 
 open Microsoft.FSharp.Quotations
@@ -27,7 +27,7 @@ val eventof       : Expr -> EventInfo
 
 Реализация модуля:
 
-```f#
+```fsharp
 module MemberInfo
 
 open Microsoft.FSharp.Quotations.Patterns

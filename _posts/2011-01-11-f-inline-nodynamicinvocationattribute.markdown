@@ -9,7 +9,7 @@ tags: fsharp inline nodynamicinvocation generics reflection peverify csharp
 
 Интерес представляет то, как F# компилирует данные `inline`-определения в MSIL. В примере кода ниже, содержатся не представляемые нативно в MSIL операции, такие как сложение значений типа `^a` и вызов статического члена с именем `Parse` и сигнатурой `string -> ^a` для произвольного типа `^a`:
 
-```f#
+```fsharp
 type Foo() =
   // member inline InlineAdd:
   //     ^a * ^a -> ^a when ^a: (static member (+): ^a * ^a -> ^a)
@@ -28,7 +28,7 @@ type Foo() =
 
 Данный код прекрасно работает, когда типы всех типов-параметров известны на момент компиляции (собственно, типы-параметры вида `^a` в F# и называются *statically resolved type variable*), через методы `InlineAdd` и `NoDynAdd` можно складывать значения любых типов, поддерживающих оператор сложения:
 
-```f#
+```fsharp
 let foo = Foo()
 let res1 = foo.InlineAdd(1, 2)
 let res2 = foo.InlineAdd(1m, 2m)
@@ -49,7 +49,7 @@ val res4 : int = 123
 ```
 А теперь попробуем вызвать все эти методы через механизм рефлексии .NET, получим экземпляры `System.Reflection.MethodInfo` для всех методов:
 
-```f#
+```fsharp
 let [ add; noDyn; memberConstr ] =
   List.map (typeof<Foo>.GetMethod) [ "InlineAdd"
                                      "NoDynAdd"
@@ -58,7 +58,7 @@ let [ add; noDyn; memberConstr ] =
 
 Теперь можно вручную задать тип-параметр методу `InlineAdd` и вызвать его через рефлексию со значениями типа `int` и `decimal`:
 
-```f#
+```fsharp
 let res1 = add.MakeGenericMethod(typeof<int>)
               .Invoke(foo, [| box 1; box 2 |])
 
@@ -73,7 +73,7 @@ let res2 = add.MakeGenericMethod(typeof<decimal>)
 
 Метод успешно работает даже с пользовательскими типами, определяющими оператор (+) и это замечательно:
 
-```f#
+```fsharp
 type Bar(value: int) =
   member __.Value = value
   override __.ToString() = sprintf "Bar(%d)" value
@@ -85,7 +85,7 @@ let res3 = add.MakeGenericMethod(typeof<Bar>)
 
 А теперь попробуем произвести те же самые действия с аналогичным `inline`-методом `NoDynAdd`, отмеченным атрибутом `[<NoDynamicInvocation>]`:
 
-```f#
+```fsharp
 let res4 = noDyn.MakeGenericMethod(typeof<int>)
                 .Invoke(foo, [| box 1; box 2 |])
 ```
@@ -119,7 +119,7 @@ public a NoDynAdd<a>(a x, a y) {
 
 А что насчёт *member constraints*? Если для некоторых встроенных операторов, F# имеет поддержку инфраструктуры во время выполнения, то для вызова произвольных методов через member constraint, пришлось бы реализовывать поддержку правил разрешения member constraints во время выполнения. Юзкейс очень редкий, реализовать оптимально сложно, поэтому F# *всегда* компилирует вызовы через member constraints как возбуждение исключения типа `NotSupportedException`:
 
-```f#
+```fsharp
 let res5 = memberConstr.MakeGenericMethod(typeof<int>)
                        .Invoke(foo, Array.empty)
 ```

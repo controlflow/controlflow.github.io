@@ -17,7 +17,7 @@ tags: fsharp events delegate lock-free subscription
 
 А вот и набросок класса, решаюшего обе проблемы:
 
-```f#
+```fsharp
 open System
 open System.Threading
 
@@ -123,7 +123,7 @@ type PowerEvent<'del, 'args
 
 Использовать практически так же, как обычные события F#:
 
-```f#
+```fsharp
 type Foo() =
     let event = PowerEvent<EventHandler, _>()
 

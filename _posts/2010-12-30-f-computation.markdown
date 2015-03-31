@@ -7,7 +7,7 @@ tags: fsharp memoize expressions compiler comparer equality computation expressi
 ---
 Сегодня предлагаю вашему вниманию ещё один, наиболее извращённый способ мемоизации в F#. Цель - получить удобный синтаксис для выделения частей функций, подвергаемых мемоизации без явного указания параметров, например:
 
-```f#
+```fsharp
 let doWork x y =
   // ...
   let result = memo {
@@ -22,7 +22,7 @@ let doWork x y =
 
 Давайте перепишем код выше следующим образом:
 
-```f#
+```fsharp
 let doWork' x y =
   // ...
   let f = (fun() ->
@@ -61,7 +61,7 @@ internal class f@44 : FSharpFunc<Unit, int> {
 
 А автоматическое оборачивание в `(fun() -> …)` возможно, при определении в классе-builder’е [computation expression](http://blogs.msdn.com/b/dsyme/archive/2007/09/22/some-details-on-f-computation-expressions-aka-monadic-or-workflow-syntax.aspx) метода `Delay(f: unit -> ‘T)`. Такой код:
 
-```f#
+```fsharp
 let result = memo {
   return x + y
 }
@@ -69,14 +69,14 @@ let result = memo {
 
 Раскрывается компилятором как:
 
-```f#
+```fsharp
 let result = 
   memo.Delay(fun() -> x + y)
 ```
 
 Без лишних слов привожу сигнатуру модуля `ComparerCompiler`, предназначенного для компилирования компаратора по типу и набору его полей:
 
-```f#
+```fsharp
 module ComparerCompiler
 
 open System.Collections.Generic
@@ -88,7 +88,7 @@ val compile: FieldInfo[] -> IEqualityComparer<'T>
 
 И его реализацию:
 
-```f#
+```fsharp
 /// Модуль с функциями для компилирования компараторов
 /// экземпляров заданных типов по набору полей
 module ComparerCompiler
@@ -208,7 +208,7 @@ let compile<'T> (fields: FieldInfo[]) =
 
 Сигнатуру модуля мемоизации:
 
-```f#
+```fsharp
 module MemoBuilder
 
 type MemoBuilder<'T> =
@@ -221,7 +221,7 @@ val inline memo<'a> : MemoBuilder<'a>
 
 И его реализацию:
 
-```f#
+```fsharp
 module MemoBuilder
 
 open System
@@ -290,7 +290,7 @@ let inline memo<'a> = MemoBuilder<'a>()
 
 И, наконец, пример использования мемоизатора:
 
-```f#
+```fsharp
 open MemoBuilder
 
 let func x y z =

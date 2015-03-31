@@ -54,7 +54,7 @@ static void AsyncDownloadGoogle() {
 
 Я это всё к тому, что *event-based asynchronous pattern* конечно же забыли, поэтому предлагаю вашему вниманию пару методов-расширений, предназначенных для преобразования асинхронных операций, выполненных в рамках данного паттерна, в родной для F# тип `Async<’a>` (получился неплохой пример применения метода `Async.FromContinuations`, надеюсь, комментариев будет достаточно):
 
-```f#
+```fsharp
 module AsyncExtensions
 
 open System
@@ -138,7 +138,7 @@ type Async with
 
 Теперь можно очень легко определить тип-расширение для операции `DownloadData` класса `WebClient` (обратите внимание на соглашение об именовании подобных методов – префикс `Async`):
 
-```f#
+```fsharp
 type WebClient with
   member this.AsyncDownloadData(uri: Uri) =
      Async.FromEventPattern(
@@ -149,7 +149,7 @@ type WebClient with
 
 Можно дополнительно преобразовывать результат операции, доставая из аргументов события результат операции:
 
-```f#
+```fsharp
 type WebClient with
   member this.AsyncDownloadData(uri: Uri) =
     async {
@@ -164,7 +164,7 @@ type WebClient with
 
 Теперь исходный пример можно выразить на F# следующим образом:
 
-```f#
+```fsharp
 open System
 open System.Net
 open System.Threading

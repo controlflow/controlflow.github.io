@@ -11,7 +11,7 @@ tags: fsharp cont computation expressions monads callcc getcc
 
 Сигнатура пространства имён:
 
-```f#
+```fsharp
 namespace FSharp.Monads
 
 type Cont<'a, 'result> = Cont of (('a -> 'result) -> 'result)
@@ -40,7 +40,7 @@ module ExtraTopLevelOperators =
 
 Реализация:
 
-```f#
+```fsharp
 namespace FSharp.Monads
 
 type Cont<'a, 'result> = Cont of (('a -> 'result) -> 'result)
@@ -84,7 +84,7 @@ module ExtraTopLevelOperators =
 
 Пример моделирования `goto`-перехода по метке - следующий код будет выполняться пока пользователь будет нажимать клавишу пробела:
 
-```f#
+```fsharp
 open FSharp.Monads
 open System
 
@@ -105,7 +105,7 @@ let goto() =
 
 Без “сахара” эта функция выглядит следующим образом (обратите внимание, что пришлось определить члены построителя computation expression, такие как `Combine` и `Delay`):
 
-```f#
+```fsharp
 let goto'() =
   printfn "press space"
   cont.Combine(
@@ -128,7 +128,7 @@ let goto'() =
 
 С помощью другой функции - `getcc’` - возможно дополнительно передавать некоторое значение при возврате к продолжению, что позволяет моделировать императивные циклы:
 
-```f#
+```fsharp
 let loop() =
   cont {
     let! value, label = Cont.getcc' 0
@@ -142,7 +142,7 @@ let loop() =
 
 Без синтаксиса computation expressions:
 
-```f#
+```fsharp
 let loop'() =
   cont.Bind(
     Cont.getcc' 0,
