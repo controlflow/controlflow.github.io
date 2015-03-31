@@ -1,0 +1,56 @@
+﻿---
+layout: post
+title: "F# sequence expressions bug (part 2)"
+date: 2010-10-08 14:02:51
+categories: 1268526072
+tags: fsharp seq ienumerable dispose finally
+---
+Немного изменив предыдущий код, я был искренне удивлён результатами:
+
+{% highlight fsharp %}
+let xs = seq {
+    try yield! seq {
+        try yield! seq {
+            try yield ()
+            finally printfn "dispose::3" }
+        finally printfn "dispose::2"; failwith "bar!" }
+    finally printfn "dispose::1" }
+
+for _ in xs do ()
+
+{% endhighlight %}
+
+Вывод оказался следующим: o__O
+
+<blockquote>
+<pre class="box">dispose::3<br/>dispose::2<br/>dispose::1
+{% endhighlight %}
+
+</blockquote>
+То есть после исключения в finally отработал внешний finally и исключение успешно долетело до вызывающей стороны… А я всего лишь удалил бросание исключения в самом вложенном генераторе…
+
+Чтобы ответить на этот вопрос, пришлось погрузиться в код, который F# генерирует для sequence expression’ов и оказалось, что работа с finally в корне отличается от итераторов C#. Интересно, что в сгенерированном коде F# не использует ни магический блок `try { } fault { }`, ни даже стандартный `try { } finally { }`. Обычно блоки finally внутренних последовательностей срабатывают, когда внешние последовательности делают им вызовы `MoveNext()`. Если во время перебора любой из последовательностей возникает исключение, то оно проваливается безо всякой обработки прямо до вызывающей стороны, которая по соглашению вызывает `.Dispose()` самой внешней последовательности, а та берёт на себя обязанность в правильном порядке вызвать `.Dispose()` вложенных последовательностей.
+
+Так почему код работает как и ожидается, не смотря на баг с исключениями в finally, описанный в предыдущем посте? Оказывается, всё очень просто: первые два finally выполняются во время вызовов MoveNext(), во втором возникает исключение, которое долетает до вызывающей стороны, которая в finally-блоке вызывает `.Dispose()` последовательности, а уже она “диспоузит” незакрытые `IEnumerator`'ы. Изменив код следующим образом:
+
+{% highlight fsharp %}
+let xs = seq {
+    try yield! seq {
+        try yield! seq {
+            try yield ()
+            finally printfn "dispose::3"; failwith "foo!" }
+        finally printfn "dispose::2"; failwith "bar!" }
+    finally printfn "dispose::1" }
+
+for _ in xs do ()
+
+{% endhighlight %}
+
+Всё встаёт на свои места:
+
+<blockquote>
+<pre class="box">dispose::3<br/>dispose::2<br/>
+{% endhighlight %}
+
+</blockquote>
+Теперь осталось поразмышлять, возможно ли это запилить простыми изменениями в стандартной библиотеке F#… =)))

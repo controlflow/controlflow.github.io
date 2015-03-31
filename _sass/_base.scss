@@ -87,7 +87,7 @@ div.highlight {
     }
 }
 
-include media-query($palm) {
+@include media-query($palm) {
     div.highlight {
         margin-left: 0;
         margin-right: 0;

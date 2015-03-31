@@ -1,0 +1,46 @@
+﻿---
+layout: post
+title: "F# mutable let inside sequence expressions"
+date: 2010-10-11 13:31:36
+categories: 1290479053
+tags: fsharp seq ienumerable mutable sequence
+---
+Наткнулся на интересные грабли в F# при попытке использовать изменяемые let-привязки внутри sequence expressions, данный код компилируется и работает:
+
+{% highlight fsharp %}
+let xs = seq {
+    yield 1
+    let mutable x = 0
+    x <- 2 // ok
+    yield x
+}
+
+{% endhighlight %}
+
+Однако если перенести присваивание подальше от определения let и убрать в цикл, то код перестаёт компилироваться:
+
+{% highlight fsharp %}
+let ys = seq {
+    yield 1
+    let mutable x = 0
+    while true do
+          x <- 2 // error FS0407!
+          yield x
+}
+
+{% endhighlight %}
+
+В ошибке компиляции говорится следующее:
+
+<blockquote>
+<pre class="box">`error FS0407:`<br/>The mutable variable 'x' is used in an invalid way. Mutable<br/>variables cannot be captured by closures. Consider eliminating<br/>this use of mutation or using a heap-allocated mutable<br/>reference cell via 'ref' and '!'.<br/>
+{% endhighlight %}
+
+</blockquote>
+Возникает вопрос: о каком захвате в замыкание идёт речь в сообщении об ошибке? Думаю, подобное описание выглядит как-то очень неадекватно, особенно для людей, не знакомых глубоко с устройством sequence expression или итераторов C#.
+
+А что касается причины такого поведения, то дело заключается в том, что выражение присваивание во втором примере попадает в состояние sequence expression’а, отличное от того, в котором была определена изменяемая let-привязка. То есть в другой case генерируемого для `MoveNext()` блока switch’а, нежели в котором изменяемая let-привязка инициализируется нулём.
+
+Компилятор F# невидимо для пользователя разбивает sequence expression на части кода (ориентируясь по yield-выражениям и выражениям, управляющим ходом выполнения) и считает, что все обращения к именам в предущей части из следующей - это замыкания. Не знаю, возможно это действительно следует называть “замыканием”, однако границы “частей” sequence expression’ов совершенно неочевидны рядовому разработчику.
+
+Не берусь судить как было бы сделать правильно: вовсе запретить в sequence expressions использовать mutable или наоборот разрешить мутирование из лубой части sequence-выражения, а может и оставить как сейчас. В любом случае, текст сообщения ошибке мог бы быть куда понятнее.
