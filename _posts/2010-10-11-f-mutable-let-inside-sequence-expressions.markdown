@@ -9,10 +9,10 @@ tags: fsharp seq ienumerable mutable sequence
 
 {% highlight fsharp %}
 let xs = seq {
-    yield 1
-    let mutable x = 0
-    x <- 2 // ok
-    yield x
+  yield 1
+  let mutable x = 0
+  x <- 2 // ok
+  yield x
 }
 {% endhighlight %}
 
@@ -20,21 +20,18 @@ let xs = seq {
 
 {% highlight fsharp %}
 let ys = seq {
-    yield 1
-    let mutable x = 0
-    while true do
-          x <- 2 // error FS0407!
-          yield x
+  yield 1
+  let mutable x = 0
+  while true do
+        x <- 2 // error FS0407!
+        yield x
 }
 {% endhighlight %}
 
 В ошибке компиляции говорится следующее:
 
-> `error FS0407:`
-> The mutable variable 'x' is used in an invalid way. Mutable
-> variables cannot be captured by closures. Consider eliminating
-> this use of mutation or using a heap-allocated mutable
-> reference cell via 'ref' and '!'.
+> `error FS0407:`<br/>
+> The mutable variable 'x' is used in an invalid way. Mutable variables cannot be captured by closures. Consider eliminating this use of mutation or using a heap-allocated mutable reference cell via 'ref' and '!'.
 
 Возникает вопрос: о каком захвате в замыкание идёт речь в сообщении об ошибке? Думаю, подобное описание выглядит как-то очень неадекватно, особенно для людей, не знакомых глубоко с устройством sequence expression или итераторов C#.
 
