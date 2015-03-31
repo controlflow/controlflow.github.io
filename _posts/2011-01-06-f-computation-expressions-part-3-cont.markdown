@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# computation expressions - part 3: cont { ... }"
 date: 2011-01-06 17:04:00

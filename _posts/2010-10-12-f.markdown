@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# [<RequiredQualifiedAccessAttribute>]"
 date: 2010-10-12 00:35:49

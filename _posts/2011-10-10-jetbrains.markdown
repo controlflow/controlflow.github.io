@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "JetBrains"
 date: 2011-10-10 14:50:00

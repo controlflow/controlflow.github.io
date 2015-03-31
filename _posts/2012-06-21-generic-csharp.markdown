@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Привет из 2001 года: Generic C# specification"
 date: 2012-06-21 11:12:00

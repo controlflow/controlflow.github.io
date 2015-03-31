@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# computation expressions - part 1: maybe { ... }"
 date: 2011-01-02 14:17:00

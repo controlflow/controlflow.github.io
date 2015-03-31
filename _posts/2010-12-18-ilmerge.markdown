@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Сам себе ILMerge"
 date: 2010-12-18 22:03:00

@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Эмуляция Haskell type classes в F#"
 date: 2011-06-22 15:41:00

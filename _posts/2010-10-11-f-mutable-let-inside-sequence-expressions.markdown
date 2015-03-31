@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# mutable let inside sequence expressions"
 date: 2010-10-11 13:31:36

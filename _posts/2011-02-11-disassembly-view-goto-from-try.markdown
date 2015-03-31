@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Disassembly view и goto from try { }"
 date: 2011-02-11 17:43:00

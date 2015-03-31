@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Эмуляция rank-2/rank-N polymorphism в F#"
 date: 2011-06-20 18:53:00

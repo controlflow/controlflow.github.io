@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# indentation-based syntax rules (part 1)"
 date: 2010-10-04 13:11:00

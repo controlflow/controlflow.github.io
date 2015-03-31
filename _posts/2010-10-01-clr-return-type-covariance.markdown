@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "CLR и return type covariance"
 date: 2010-10-01 13:25:31

@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "ISerializationSurrogate"
 date: 2010-10-20 01:13:00

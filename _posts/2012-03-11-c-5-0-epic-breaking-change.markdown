@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "C# 5.0 epic breaking change"
 date: 2012-03-11 16:29:00

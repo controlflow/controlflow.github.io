@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# StructuredFormatDisplayAttribute"
 date: 2011-01-18 21:10:00

@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "LINQ over recursive data"
 date: 2010-10-10 02:33:00

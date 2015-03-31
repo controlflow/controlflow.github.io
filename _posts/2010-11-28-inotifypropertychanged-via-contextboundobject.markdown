@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "INotifyPropertyChanged via ContextBoundObject"
 date: 2010-11-28 15:12:00

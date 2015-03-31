@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "JavaScript object layout"
 date: 2011-12-26 16:09:13

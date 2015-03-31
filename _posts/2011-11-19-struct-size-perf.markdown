@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "NAME PLZ"
 date: 2011-11-19 02:16:00

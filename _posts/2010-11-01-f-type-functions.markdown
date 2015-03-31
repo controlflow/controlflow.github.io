@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# type functions"
 date: 2010-11-01 00:00:00

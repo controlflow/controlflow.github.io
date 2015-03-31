@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Великий и могучий Delegate.CreateDelegate"
 date: 2011-01-17 16:19:00

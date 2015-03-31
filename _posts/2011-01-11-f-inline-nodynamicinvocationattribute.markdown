@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# inline & NoDynamicInvocationAttribute"
 date: 2011-01-11 21:01:00

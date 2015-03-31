@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Delegate equality и делегаты из методов интерфейсов"
 date: 2011-11-14 14:12:31

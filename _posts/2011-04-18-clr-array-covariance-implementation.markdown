@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "CLR array covariance implementation"
 date: 2011-04-18 18:00:00

@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# async + event-based asynchronous pattern"
 date: 2010-11-24 03:37:00

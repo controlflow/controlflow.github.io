@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# sequence expressions bug"
 date: 2010-10-08 10:58:23

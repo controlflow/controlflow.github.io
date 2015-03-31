@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "С# attribute-target-specifier"
 date: 2010-11-04 18:51:04

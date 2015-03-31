@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Совсем немного про type kinds"
 date: 2011-10-17 21:10:00

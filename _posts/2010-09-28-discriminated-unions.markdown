@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Discriminated unions"
 date: 2010-09-28 23:13:36

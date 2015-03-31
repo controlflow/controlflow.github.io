@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "TextOptions.TextFormattingMode и WPF 3.5"
 date: 2013-03-20 13:04:00

@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "First-class call site - part1: размышления"
 date: 2012-02-27 12:05:00

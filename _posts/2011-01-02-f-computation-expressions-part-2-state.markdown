@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# computation expressions - part 2: state { ... }"
 date: 2011-01-02 16:32:00

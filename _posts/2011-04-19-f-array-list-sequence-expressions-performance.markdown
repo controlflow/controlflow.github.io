@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# array/list sequence expressions performance"
 date: 2011-04-19 20:00:00

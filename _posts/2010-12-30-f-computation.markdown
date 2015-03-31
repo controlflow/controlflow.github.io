@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Мемоизация выражений F# + синтаксис computation expressions"
 date: 2010-12-30 16:57:00

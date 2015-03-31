@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# computation expressions - part 4: cont + getCC"
 date: 2011-03-15 14:00:00

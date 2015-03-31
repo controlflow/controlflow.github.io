@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# Research Compiler with Joinads!"
 date: 2011-03-28 23:08:00

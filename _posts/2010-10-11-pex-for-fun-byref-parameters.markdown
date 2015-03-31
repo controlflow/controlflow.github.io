@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Pex for fun + byref parameters"
 date: 2010-10-11 15:58:01

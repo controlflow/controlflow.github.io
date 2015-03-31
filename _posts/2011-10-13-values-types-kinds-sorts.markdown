@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Values - Types - Kinds - Sorts"
 date: 2011-10-13 17:02:00

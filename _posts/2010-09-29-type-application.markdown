@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "Type Application"
 date: 2010-09-29 13:32:51

@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "C# CachedAnonymousMethodDelegate"
 date: 2010-10-15 01:25:47

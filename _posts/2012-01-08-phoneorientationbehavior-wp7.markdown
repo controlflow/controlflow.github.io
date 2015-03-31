@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "PhoneOrientationBehavior для WP7"
 date: 2012-01-08 20:52:00

@@ -11,14 +11,13 @@ tags: csharp enumerable iterator yield return
 using System.Collections;
 using System.Collections.Generic;
 
-class Foo
-{
-	IEnumerable Bar1() { yield return 1; }
-	IEnumerator Bar2() { yield return 2; }
-	IEnumerable<int> Bar3() { yield return 3; }
-	IEnumerator<int> Bar4() { yield return 4; }
+class Foo {
+  IEnumerable Bar1() { yield return 1; }
+  IEnumerator Bar2() { yield return 2; }
+  IEnumerable<int> Bar3() { yield return 3; }
+  IEnumerator<int> Bar4() { yield return 4; }
 
-	static void Main() { }
+  static void Main() { }
 }
 {% endhighlight %}
 

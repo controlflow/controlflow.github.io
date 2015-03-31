@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# events + lock-free + async (updated)"
 date: 2010-10-21 02:05:00

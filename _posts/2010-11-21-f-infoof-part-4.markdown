@@ -1,4 +1,4 @@
-﻿---
+---
 layout: post
 title: "F# infoof (part 4)"
 date: 2010-11-21 04:53:00
