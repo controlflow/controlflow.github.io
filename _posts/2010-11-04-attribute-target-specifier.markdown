@@ -7,24 +7,33 @@ tags: csharp attributes typevar
 ---
 Забавно, не смотря на то, что грамматика C# для указания аннотируемого атрибутом элемента языка, предусматривает ограниченный набор значений:
 
-<blockquote>
-*attribute-section:*<br/>    [ *attribute-target-specifier<sub>opt</sub>  attribute-list* ]<br/>    [ *attribute-target-specifier<sub>opt</sub>  attribute-list ,* ]<br/><br/>*attribute-target-specifier:*<br/>*    attribute-target :*<br/><br/>*attribute-target:*<br/>    <code>field</code><br/>    <code>event</code><br/>    <code>method</code><br/>    <code>param</code><br/>    <code>property</code><br/>    <code>return</code><br/>    <code>type</code>
+> *attribute-section:*<br/>
+>     [ *attribute-target-specifier<sub>opt</sub>  attribute-list* ]<br/>
+>     [ *attribute-target-specifier<sub>opt</sub>  attribute-list ,* ]<br/>
+> <br/>
+> *attribute-target-specifier:*<br/>
+>     *attribute-target :*<br/>
+> <br/>
+> *attribute-target:*<br/>
+>     `field`<br/>
+>     `event`<br/>
+>     `method`<br/>
+>     `param`<br/>
+>     `property`<br/>
+>     `return`<br/>
+>     `type`
 
-</blockquote>
 На деле (компилятор С# 4.0) всё оказывается несколько иначе, код:
 
 {% highlight C# %}
 [someCrazyAttributeTargetLocation: Serializable]
 class Foo { }
-
 {% endhighlight %}
 
 Компилируется без ошибок, но с одним warning’ом:
 
-<blockquote>
-*warning CS0658:* ‘someCrazyAttributeTargetLocation’ is not a recognized attribute location. All attributes in this block will be ignored.
+> warning CS0658: ‘someCrazyAttributeTargetLocation’ is not a recognized attribute location. All attributes in this block will be ignored.
 
-</blockquote>
 Соответственно, в рантайме получаем `typeof(Foo).IsSerializable == false`. Однако, [читая](http://rsdn.ru/forum/dotnet/4024505.aspx) Владимира Решетникова на rsdn, можно обнаружить, что существует ещё один *attribute-target-specifier*, не перечисленный в грамматике C#, который компилятор воспринимает без warning’а:
 
 {% highlight C# %}
@@ -37,4 +46,4 @@ sealed class Bar<[typevar: Foo] T> { }
 
 Знакомьтесь, скрытый *attribute-target-specifier* - `typevar`. Применение атрибута где-либо вне типа-параметра (если убрать `[AttributeUsage]`) будет результировать предупреждением *CS0658*.
 
-Компилятор F# более строг и использование произвольных <span class="CodeInline">*<span lang="EN-US" xml:lang="EN-US">attribute-target*<span lang="EN-US" xml:lang="EN-US"> <span lang="EN-US" xml:lang="EN-US">не<span lang="EN-US" xml:lang="EN-US"> позволяет вовсе.*<span lang="EN-US" xml:lang="EN-US"><br/>*
+Компилятор F# более строг и использование произвольных *attribute-target* не позволяет вовсе.

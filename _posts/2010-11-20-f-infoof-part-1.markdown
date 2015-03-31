@@ -5,8 +5,6 @@ date: 2010-11-20 04:15:00
 categories: 1622690381
 tags: fsharp infoof quotations patterns pattern-matching
 ---
-Доброй ночи!
-
 Сегодня предлагаю обсудить такие элементы F#, как совпадение с образцом (*pattern matching*) и активные образцы F# (*active patterns*), которые незаменимы, при работе с цитированием кода (*F# quotations*). В качестве задания, попробуем написать набор функций, логически похожих на `typeof<T>` и предназначенных получения различных наследников `System.Reflection.MemberInfo` для заданных свойств, методов, функций, конструкторов и прочих элементов кода. То есть напишем на F# аналог несуществующего оператора `infoof()` (читай *info-of*), аналоги которого все кому не лень, реализуют в C# на базе *Expression Trees*, например, [вот](http://codebetter.com/blogs/patricksmacchia/archive/2010/06/28/elegant-infoof-operators-in-c-read-info-of.aspx) (обсуждение Эрика Липперта [здесь](http://blogs.msdn.com/b/ericlippert/archive/2009/05/21/in-foof-we-trust-a-dialogue.aspx)).
 
 Давайте попробуем описать простую функцию, получающую процитированное выражение F# и возвращающую объект типа `System.Reflection.PropertyInfo` в случае, если переданное выражение является выражением доступа к свойству:
@@ -15,9 +13,9 @@ tags: fsharp infoof quotations patterns pattern-matching
 open Microsoft.FSharp.Quotations.Patterns
 
 let propertyof expr =
-    match expr with
-        | PropertyGet(_, info, _) -> info
-        | _ -> failwith "Not a property expression"
+  match expr with
+    | PropertyGet(_, info, _) -> info
+    | _ -> failwith "Not a property expression"
 {% endhighlight %}
 
 Всё, что делает данная функция – использует «активный образец» (или «активный шаблон», *active pattern*) из модуля `Microsoft.FSharp.Quotations.Patterns` для попытки извлечения выражения доступа к свойству. Функцию легко использовать для получения `PropertyInfo` статических свойств и свойств различных переменных и литералов, доступных в контексте вызова `propertyof`:
@@ -55,11 +53,11 @@ val it : Quotations.Expr<(string -> int)> =
 
 {% highlight fsharp %}
 let propertyof expr =
-    match expr with
-        | PropertyGet(_, info, _) -> info
-        | Lambda(arg, PropertyGet(Some(Var var), info, _))
-            when arg = var -> info
-        | _ -> failwith "Not a property expression"
+  match expr with
+    | PropertyGet(_, info, _) -> info
+    | Lambda(arg, PropertyGet(Some(Var var), info, _))
+        when arg = var -> info
+    | _ -> failwith "Not a property expression"
 {% endhighlight %}
 
 Тут и раскрывается вся соль совпадения с образцом: шаблоны-образцы могут быть *вложены друг в друга*, что делает pattern-matching очень мощной техникой, позволяющей легко «опознавать» сложные структуры и конструкции различных объектов. То есть если выражение `expr` является лямбда-выражением, то параметру лямбда выражение будет дано имя `arg`, а тело лямбда-выражения будет проверяться на соответствие шаблону `PropertyGet(Some(Var var), info, _)`, который совпадает с выражениями доступа к свойству уровня экземпляра (иначе первый параметр шаблона `PropertyGet` будет равняться `None`). Причём экземпляр, к чьему свойству происходит обращение, должен быть задан переменной, совпадающей с шаблоном `Var var`. Осталось лишь проверить с помощью *guard-выражения* `when` идентичность переменной `var` и аргумента лямбда-выражения `arg`, тем самым запретив к совпадению лямдба-выражения вида: `fun x -> someOtherVar.Property`. Вот и всё!
@@ -89,12 +87,12 @@ val it : Quotations.Expr<bool> =
 
 {% highlight fsharp %}
 let propertyof expr =
-    match expr with
-        | PropertyGet(_, info, _) -> info
-        | Lambda(arg, PropertyGet(Some(Var var), info, _))
-        | Let(arg, _, PropertyGet(Some(Var var), info, _))
-            when arg = var -> info
-        | _ -> failwith "Not a property expression"
+  match expr with
+    | PropertyGet(_, info, _) -> info
+    | Lambda(arg, PropertyGet(Some(Var var), info, _))
+    | Let(arg, _, PropertyGet(Some(Var var), info, _))
+        when arg = var -> info
+    | _ -> failwith "Not a property expression"
 {% endhighlight %}
 
 Обратите внимание, что я объединил два образца через *ИЛИ-шаблон* `|` (ещё пример: `match x with 1 | 2 | 3 -> true | _ -> false`), так как оба образца содержат одинаковый набор имён для совпадений (`arg`, `var`, `info`) соответственно идентичных типов. Обратите внимание, что ограничивающее `when`-выражение тут действует на оба возможных совпадения *ИЛИ-шаблона*. Проверяем работоспособность:
@@ -110,12 +108,9 @@ let propertyof expr =
 
 Выводит на экран:
 
-<blockquote>
-```
-System.IO.TextWriter Out
-Boolean IsClass
-Int32 Length
-Int32 Length
-```
-</blockquote>
+    System.IO.TextWriter Out
+    Boolean IsClass
+    Int32 Length
+    Int32 Length
+
 Ок, остановимся на данном варианте и в следующем посте попробуем описать функцию посложнее: `methodof`.

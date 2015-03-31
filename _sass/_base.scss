@@ -78,14 +78,8 @@ p {
 
 p + p { text-indent: 1.5em; }
 ul + p { text-indent: 1.5em; }
-
-div.highlight {
-    margin-left: 1.5em;
-    margin-right: 1.5em;
-    + p {
-        text-indent: 1.5em;
-    }
-}
+pre + p { text-indent: 1.5em; }
+div.highlight + p { text-indent: 1.5em; }
 
 blockquote {
     color: $grey-color;
@@ -97,10 +91,15 @@ blockquote {
     > :last-child {
         margin-bottom: 0;
     }
+
+    p {
+        text-align: left;
+    }
 }
 
-blockquote p {
-    text-align: left;
+pre {
+    margin-left: 1.5em;
+    margin-right: 1.5em;
 }
 
 @include media-query($on-palm) {
@@ -110,6 +109,11 @@ blockquote p {
     }
 
     blockquote {
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    pre {
         margin-left: 0;
         margin-right: 0;
     }
