@@ -15,13 +15,13 @@ open System
 let source : int IObservable = ...
 
 let rec subscription : IDisposable =
-    source.Subscribe {
-        new IObserver<int> with
-            member o.OnNext(x) =
-               if x > 0 then
-                  subscription.Dispose()
-            ...
-    }
+  source.Subscribe {
+    new IObserver<int> with
+      member o.OnNext(x) =
+        if x > 0 then
+          subscription.Dispose()
+      ...
+  }
 {% endhighlight %}
 
 То есть мы использовали значение `subscription` внутри самого определения того, чем же `subscription` будет на самом деле являться. Ключевой момент тут заключается в том, что все обращения к `subscription` внутри `IObserver`'а являются отложенными, они не будут производиться во время вызова `Subscribe()`, иначе это приводило либо к ошибке компиляции, если компилятор может выяснить, что использование не является отложенным:
@@ -30,9 +30,8 @@ let rec subscription : IDisposable =
 let rec foo : int = foo
 {% endhighlight %}
 
-```
-*error FS0031: *The value 'foo' will be evaluated as part of its own definition
-```
+> **error FS0031:** The value 'foo' will be evaluated as part of its own definition
+
 Либо результировать ошибкой времени исполнения с непонятным сообщением:
 
 {% highlight fsharp %}
@@ -40,15 +39,15 @@ let rec foo =
     let f() = foo + 1 in f()
 {% endhighlight %}
 
-```
-*System.InvalidOperationException: *ValueFactory attempted to access the Value property of this instance.
-```
-Вот ещё один пример рекурсивного определения значения бесконечной последовательности чисел Фибоначчи, возможного благодаря тому, что seq-выражения являются отложенными:
+> **System.InvalidOperationException:** ValueFactory attempted to access the Value property of this instance.
+
+Вот ещё один пример рекурсивного определения значения бесконечной последовательности чисел Фибоначчи, возможного благодаря тому, что `seq`-выражения являются отложенными:
 
 {% highlight fsharp %}
 let rec fibs =
     seq { yield 0
-          yield! Seq.scan (+) 1 fibs  } |> Seq.cache
+          yield! Seq.scan (+) 1 fibs
+    } |> Seq.cache
 {% endhighlight %}
 
 Или более «понятный» вариант, через сложение последовательности с самой собой, смещённой на один элемент:
@@ -59,17 +58,14 @@ let rec fibs' =
           yield 1
           yield! Seq.map2 (+)
                     (Seq.skip 1 fibs')
-                               (fibs') } |> Seq.cache
+                               (fibs')
+    } |> Seq.cache
 {% endhighlight %}
 
 В любом случае компилятор F# не любит рекурсивные определения значений и ругается на них следующим предупреждением:
 
-```
-*warning FS0040: *This and other recursive references to the object(s) being defined
-will be checked for initialization-soundness at runtime through the
-use of a delayed reference. This is because you are defining one
-or more recursive objects, rather than recursive functions.
-```
+> **warning FS0040:** This and other recursive references to the object(s) being defined will be checked for initialization-soundness at runtime through the use of a delayed reference. This is because you are defining one or more recursive objects, rather than recursive functions.
+
 Которое легко прибить директивой компилятора:
 
 {% highlight fsharp %}
@@ -84,18 +80,18 @@ or more recursive objects, rather than recursive functions.
 module LetRec
 
 let rec foo =
-    let neverUsed() = foo + 1
-    in 0
+  let neverUsed() = foo + 1
+  in 0
 {% endhighlight %}
 
 Реально компилятор F# транлирует в примерно следующий код:
 
 {% highlight fsharp %}
 let rec private foo' =
-    lazy (
-       let neverUsed() = Lazy.force foo' + 1
-       in 0
-    )
+  lazy (
+    let neverUsed() = Lazy.force foo' + 1
+    in 0
+  )
 
 let foo = Lazy.force foo'
 {% endhighlight %}
@@ -108,37 +104,34 @@ let foo = Lazy.force foo'
 let mutable f = (fun() -> 0)
 
 try
-     let rec foo : int =
-         f <- (fun() -> foo) // сохраняем обращение к foo в f
-         failwith "uups!"    // и выбрасываем исключение
+  let rec foo : int =
+    f <- (fun() -> foo) // сохраняем обращение к foo в f
+    failwith "uups!"    // и выбрасываем исключение
 
-     printfn "foo = %d" foo
+  printfn "foo = %d" foo
 with e ->
-     printfn "foo = %A" e.Message
+  printfn "foo = %A" e.Message
 {% endhighlight %}
 
-```
-foo = uups!
-```
+> foo = uups!
+
 Если теперь обратиться к значению функционального типа `f`, то мы снова получим исключение:
 
 {% highlight fsharp %}
 try
-     printfn "f() = %d" (f())
+  printfn "f() = %d" (f())
 with e ->
-     printfn "f() = %A" e.Message
+  printfn "f() = %A" e.Message
 {% endhighlight %}
 
-```
-f() = uups!
-```
+> f() = uups!
+
 В итоге следует понимать, что обращения к значению внутри определения его самого обращаются в манипуляции с классом `Lazy<’T>`, которые имеют небольшой оверхед и могут приводить к исключениям в неожиданных местах, поэтому следует свести к минимуму вероятность возникновения исключения в коде инициализации рекурсивного значения. Старайтесь вовсе избегать использования рекурсивных значений, заменяя значения на функции или используя вспомогательные «мутабельные» средства. Например, в [Rx](http://msdn.microsoft.com/en-us/devlabs/ee794896.aspx) для решения проблемы с `IObserver`'ом из начала поста применяется класс `MutableDisposable`:
 
 {% highlight C# %}
 var subscribtion = new System.Disposables.MutableDisposable();
 
-subscribtion.Disposable = source.Subscribe(
-    x => {
-        if (x > 0) subscribtion.Dispose();
-    });
+subscribtion.Disposable = source.Subscribe(x => {
+  if (x > 0) subscribtion.Dispose();
+});
 {% endhighlight %}

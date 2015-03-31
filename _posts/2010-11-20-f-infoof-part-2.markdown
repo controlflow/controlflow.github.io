@@ -9,18 +9,18 @@ tags: fsharp infoof pattern-matching patterns quotations
 
 {% highlight fsharp %}
 type Foo() =
-     static member StaticM() = ()
-     member this.InstanceM() = ()
-     member this.OverloadedM(_: int) = ()
-     member this.OverloadedM(_: string) = ()
-     member this.OverloadedM(_: int, _: int) = ()
+  static member StaticM() = ()
+  member this.InstanceM() = ()
+  member this.OverloadedM(_: int) = ()
+  member this.OverloadedM(_: string) = ()
+  member this.OverloadedM(_: int, _: int) = ()
 
 module Bar =
-     let func () = ()
-     let tupled (x,y) = x + y
-     let curried x y = x + y
-     let mixed (a,b,c) (x,y) z = a+b+c+x+y+z
-     let generic x = x
+  let func () = ()
+  let tupled (x,y) = x + y
+  let curried x y = x + y
+  let mixed (a,b,c) (x,y) z = a+b+c+x+y+z
+  let generic x = x
 {% endhighlight %}
 
 И попробуем процитировать вызовы:
@@ -108,23 +108,23 @@ val body : Expr =
 
 {% highlight fsharp %}
 let (|Func|_|) expr =
-    let onlyVar = function Var v -> Some v | _ -> None
-    match expr with
-        // функ.значения без аргументов
-        | Lambda(arg, Call(target, info, []))
-            when arg.Type = typeof<unit> -> Some(target, info)
+  let onlyVar = function Var v -> Some v | _ -> None
+  match expr with
+    // функ.значения без аргументов
+    | Lambda(arg, Call(target, info, []))
+        when arg.Type = typeof<unit> -> Some(target, info)
 
-        // функ.значения с одним аргументом
-        | Lambda(arg, Call(target, info, [ Var var ]))
-            when arg = var -> Some(target, info)
+    // функ.значения с одним аргументом
+    | Lambda(arg, Call(target, info, [ Var var ]))
+        when arg = var -> Some(target, info)
 
-        // функ.значения с набором каррированных
-        // или взятых в кортеж аргументов
-        | Lambdas(args, Call(target, info, exprs))
-            when List.choose onlyVar exprs
-               = List.concat args -> Some(target, info)
+    // функ.значения с набором каррированных
+    // или взятых в кортеж аргументов
+    | Lambdas(args, Call(target, info, exprs))
+        when List.choose onlyVar exprs
+           = List.concat args -> Some(target, info)
 
-        | _ -> None
+    | _ -> None
 {% endhighlight %}
 
 Активный образец возвращает пару из экземпляра, чей метод вызывается и экземпляр `MethodInfo` этого метода/функции, при этом активный образец может не совпасть вовсе (об этом свидетельствует `|_|` в конце имени активного образца).
@@ -133,29 +133,29 @@ let (|Func|_|) expr =
 
 {% highlight fsharp %}
 let methodof expr =
-    match expr with
-        // любые обычные вызовы: foo.Bar()
-        | Call(_, info, _) -> info
+  match expr with
+    // любые обычные вызовы: foo.Bar()
+    | Call(_, info, _) -> info
 
-        // вызовы и функ.значения через аргумент лямбды:
-        // fun (x: string) -> x.Substring(1, 2)
-        // fun (x: string) -> x.StartsWith
-        | Lambda(arg, Call(Some(Var var), info, _))
-        | Lambda(arg, Func(Some(Var var), info))
-              when arg = var -> info
+    // вызовы и функ.значения через аргумент лямбды:
+    // fun (x: string) -> x.Substring(1, 2)
+    // fun (x: string) -> x.StartsWith
+    | Lambda(arg, Call(Some(Var var), info, _))
+    | Lambda(arg, Func(Some(Var var), info))
+          when arg = var -> info
 
-        // любые функциональные значения:
-        // someString.StartsWith
-        | Func(_, info) -> info
+    // любые функциональные значения:
+    // someString.StartsWith
+    | Func(_, info) -> info
 
-        // вызовы и функ.значения через экземпляры:
-        // "abc".StartsWith("a")
-        // "abc".Substring
-        | Let(arg, _, Call(Some (Var var), info, _))
-        | Let(arg, _, Func(Some (Var var), info))
-             when arg = var -> info
+    // вызовы и функ.значения через экземпляры:
+    // "abc".StartsWith("a")
+    // "abc".Substring
+    | Let(arg, _, Call(Some (Var var), info, _))
+    | Let(arg, _, Func(Some (Var var), info))
+         when arg = var -> info
 
-        | _ -> failwith "Not a method expression"
+    | _ -> failwith "Not a method expression"
 {% endhighlight %}
 
 И тут возникает один нюанс: такой `methodof` не всегда работает, если на вход подаётся выражение значения функционального типа, созданного из перегруженного метода:
@@ -165,16 +165,12 @@ let foo = Foo()
 methodof<@ foo.OverloadedM @>
 {% endhighlight %}
 
-```
-`error FS0041:`
-A unique overload for method 'OverloadedM' could not be determined 
-based on type information prior to this program point. The available 
-overloads are shown below (or in the Error List window). A type 
-annotation may be needed.
+> **error FS0041:**<br/>
+> A unique overload for method 'OverloadedM' could not be determined based on type information prior to this program point. The available overloads are shown below (or in the Error List window). A type annotation may be needed.<br/>
+> <br/>
+> Possible overload: 'member Foo.OverloadedM : string -> unit'.<br/>
+> Possible overload: 'member Foo.OverloadedM : int -> unit'.
 
-Possible overload: 'member Foo.OverloadedM : string -> unit'.
-Possible overload: 'member Foo.OverloadedM : int -> unit'.
-```
 Компилятору можно подсказать, явно типизируя выражение функционального типа:
 
 {% highlight fsharp %}
@@ -192,10 +188,9 @@ methodof<@ foo.OverloadedM : _ * _  -> _ @>
 
 {% highlight fsharp %}
 let methoddefof expr =
-    match methodof expr with
-        | info when info.IsGenericMethod ->
-                    info.GetGenericMethodDefinition()
-        | info -> failwithf "%A is not generic" info
+  match methodof expr with
+    | info when info.IsGenericMethod -> info.GetGenericMethodDefinition()
+    | info -> failwithf "%A is not generic" info
 {% endhighlight %}
 
 Итак, проверяем:
@@ -230,33 +225,32 @@ let methoddefof expr =
 
 Выводит на экран:
 
-```
-String ReadLine()
-String ReadLine()
-Void Write(Char)
-Void Write(Int32)
-Void WriteLine(String)
-Boolean StartsWith(String)
-Boolean StartsWith(String)
-Boolean StartsWith(String)
-String Substring(Int32)
-Void WriteLine(Int32)
-Void WriteLine(Double)
-Int32 CompareTo(Object)
-Int32 Max(Int32, Int32)
-Double Max(Double, Double)
-Char[] ToCharArray(Int32, Int32)
-Decimal Max(Decimal, Decimal)
-IEnumerable`1[Object]
-    Map[Object,Object](FSharpFunc`2[Object,Object],
-                       IEnumerable`1[Object])
-Tuple`2[FSharpList`1[Object],FSharpList`1[Object]]
-    Unzip[Object,Object](FSharpList`1[Tuple`2[Object, Object]])
-Int32 CompareTo(Double)
-T Identity[T](T)
-Tuple`2[FSharpList`1[T1],FSharpList`1[T2]]
-    Unzip[T1,T2](FSharpList`1[Tuple`2[T1,T2]])
-IEnumerable`1[TResult]
-    Map[T,TResult](FSharpFunc`2[T,TResult], IEnumerable`1[T])
-```
+    String ReadLine()
+    String ReadLine()
+    Void Write(Char)
+    Void Write(Int32)
+    Void WriteLine(String)
+    Boolean StartsWith(String)
+    Boolean StartsWith(String)
+    Boolean StartsWith(String)
+    String Substring(Int32)
+    Void WriteLine(Int32)
+    Void WriteLine(Double)
+    Int32 CompareTo(Object)
+    Int32 Max(Int32, Int32)
+    Double Max(Double, Double)
+    Char[] ToCharArray(Int32, Int32)
+    Decimal Max(Decimal, Decimal)
+    IEnumerable`1[Object]
+        Map[Object,Object](FSharpFunc`2[Object,Object],
+                           IEnumerable`1[Object])
+    Tuple`2[FSharpList`1[Object],FSharpList`1[Object]]
+        Unzip[Object,Object](FSharpList`1[Tuple`2[Object, Object]])
+    Int32 CompareTo(Double)
+    T Identity[T](T)
+    Tuple`2[FSharpList`1[T1],FSharpList`1[T2]]
+        Unzip[T1,T2](FSharpList`1[Tuple`2[T1,T2]])
+    IEnumerable`1[TResult]
+        Map[T,TResult](FSharpFunc`2[T,TResult], IEnumerable`1[T])
+
 Всё работает, катаемся! В следующем посте попробуем собрать всё это дело воедино…

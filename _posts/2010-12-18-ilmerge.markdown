@@ -5,13 +5,11 @@ date: 2010-12-18 22:03:00
 categories: 2362831115
 tags: csharp ilmerge assembly msbuild assemblyresolve
 ---
-Привет всем :)
-
-Сегодня поговорим о том, как можно обойтись без [ILMerge](http://research.microsoft.com/en-us/people/mbarnett/ilmerge.aspx) если вам требуется скрыть сборки, от которых вы зависите, внутри единого exe-файла. Дело в том, что .NET позволяет вмешиваться в процесс поиска требуемых сборок, путём подписки на событие `[AppDomain.AssemblyResolve](http://msdn.microsoft.com/en-us/library/system.appdomain.assemblyresolve.aspx)` для конкретного домена. Подписчик на событие должен вернуть загруженный экземпляр класса `System.Reflection.Assembly`, если сборка с именем `args.Name` может быть им найдена или вернуть `null` в противном случае. Если подписаться на данное событие до того момента, как приложению понадобится зависимая сборка, то можно запросто загрузить требуемую сборку из embedded-ресурсов приложения.
+Сегодня поговорим о том, как можно обойтись без [ILMerge](http://research.microsoft.com/en-us/people/mbarnett/ilmerge.aspx) если вам требуется скрыть сборки, от которых вы зависите, внутри единого exe-файла. Дело в том, что .NET позволяет вмешиваться в процесс поиска требуемых сборок, путём подписки на событие [`AppDomain.AssemblyResolve`](http://msdn.microsoft.com/en-us/library/system.appdomain.assemblyresolve.aspx) для конкретного домена. Подписчик на событие должен вернуть загруженный экземпляр класса `System.Reflection.Assembly`, если сборка с именем `args.Name` может быть им найдена или вернуть `null` в противном случае. Если подписаться на данное событие до того момента, как приложению понадобится зависимая сборка, то можно запросто загрузить требуемую сборку из embedded-ресурсов приложения.
 
 Давайте создадим в Visual Studio решение из двух проектов: *Console Application* и *Class Library*. Определим ссылку консольного приложения на библиотеку и отключим параметр *Copy Local* в свойствах ссылки на сборку (то есть после сборки решения в каталоге консольного приложения будет не хватать сборки `ClassLib.dll`):
 
-![](http://media.tumblr.com/tumblr_ldn0hcMhkf1qdrm28.png)
+![]({{site.baseurl}}/images/ilmerge.png)
 
 Отлично, теперь следует добавить сборку библиотеки как embedded-ресурс консольного приложения. Это можно сделать средствами Visual Studio, но не без существенных недостатков: если добавить сборку в проект, то она скопируется и не будет обновляться при обновлении кода проекта *Class Library*. Если добавить сборку в проект как ссылку (действие *Add as link* в диалоге *Add Existing Item*), то Visual Studio зачем-то отобразит в дереве проекта все каталоги, в которых находится эта сборка. В любом из случаев Visual Studio не позволяет контролировать имя embedded-ресурса, поэтому мы поступим хитрее.
 
@@ -44,7 +42,7 @@ tags: csharp ilmerge assembly msbuild assemblyresolve
   <!-- ... -->
 {% endhighlight %}
 
-Это всё равно не очень приятно выглядит: приходится указывать полное имя сборки, завязываться на output-пути другого проекта и тот факт, что названия конфигурации обоих проектов (доступные через выражение `$(Configuration)`) должны совпадать. Однако некоторую автоматизацию данный подход всё же осуществляет (изменения проекта *Class Library* будут автоматически переносится в embedded-ресурс консольного приложения), а если глубже погрузиться в MsBuild, то можно устранить эти недостатки, например, получая полное имя сборки автоматически с помощью задачи `[GetAssemblyIdentity](http://msdn.microsoft.com/en-us/library/ms164296.aspx)`.
+Это всё равно не очень приятно выглядит: приходится указывать полное имя сборки, завязываться на output-пути другого проекта и тот факт, что названия конфигурации обоих проектов (доступные через выражение `$(Configuration)`) должны совпадать. Однако некоторую автоматизацию данный подход всё же осуществляет (изменения проекта *Class Library* будут автоматически переносится в embedded-ресурс консольного приложения), а если глубже погрузиться в MsBuild, то можно устранить эти недостатки, например, получая полное имя сборки автоматически с помощью задачи [`GetAssemblyIdentity`](http://msdn.microsoft.com/en-us/library/ms164296.aspx).
 
 Остался один нюанс - необходимо подписаться на событие `AssemblyResolve` до того, как приложению потребуется зависимая сборка. А что, если сборка понадобится уже в коде метода `Main` (точки входа сборки)? Ведь CLR требует, чтобы все необходимые методу сборки, были подгружены до начала исполнения этого метода. Ответ достаточно простой: в сборках с точкой входа самым первым исполняется статический конструктор типа, содержащего метод точки входа, и только потом исполнение переходит к методу `Main`. Таким образов, код приложения может иметь следующий вид:
 
@@ -52,52 +50,43 @@ tags: csharp ilmerge assembly msbuild assemblyresolve
 using System;
 using System.Reflection;
 
-class Program
-{
-    static Program()
-    {
-        AppDomain.CurrentDomain.AssemblyResolve += (_, args) =>
-        {
-            byte[] rawAssembly;
+class Program {
+  static Program() {
+    AppDomain.CurrentDomain.AssemblyResolve += (_, args) => {
+      byte[] rawAssembly;
+      
+      // ищем в embedded-ресурсах текущей сборки
+      // ресурс с именем сборки, чей поиск осуществляется
+      var assembly = Assembly.GetExecutingAssembly();
+      using (var stream = assembly.GetManifestResourceStream(args.Name)) {
+        // если сборка не нашлась
+        if (stream == null) return null;
 
-            // ищем в embedded-ресурсах текущей сборки
-            // ресурс с именем сборки, чей поиск осуществляется
-            using (var stream = Assembly
-                .GetExecutingAssembly()
-                .GetManifestResourceStream(args.Name))
-            {
-                // если сборка не нашлась
-                if (stream == null) return null;
+        // считываем в массив байт
+        rawAssembly = new byte[stream.Length];
+        stream.Read(rawAssembly, 0, (int) stream.Length);
+      }
 
-                // считываем в массив байт
-                rawAssembly = new byte[stream.Length];
-                stream.Read(rawAssembly, 0, (int) stream.Length);
-            }
+      return Assembly.Load(rawAssembly);
+    };
+  }
 
-            return Assembly.Load(rawAssembly);
-        };
-    }
-
-    static void Main()
-    {
-        ClassLib.Foo.SayHello();
-        Console.ReadKey(true);
-    }
+  static void Main() {
+    ClassLib.Foo.SayHello();
+    Console.ReadKey(true);
+  }
 }
 {% endhighlight %}
 
 Код “библиотеки”:
 
 {% highlight C# %}
-namespace ClassLib
-{
-    public class Foo
-    {
-        public static void SayHello()
-        {
-            System.Console.WriteLine("Hello from ClassLib.Foo!");
-        }
+namespace ClassLib {
+  public class Foo {
+    public static void SayHello() {
+      System.Console.WriteLine("Hello from ClassLib.Foo!");
     }
+  }
 }
 {% endhighlight %}
 
@@ -107,7 +96,7 @@ namespace ClassLib
 * Код, загружаемый через `Assembly.Load(byte[])` скорее всего подвергается JIT-компиляции при каждом запуске (не нашёл возможности проверить, но скорее всего это так).
 * Описанная выше подписка на событие `AssemblyResolve` в статическом конструкторе класса имеет смысл только в сборках, имеющих точку входа (exe-приложения). То есть не выйдет так же просто убрать зависимости dll-библиотеки в embedded-ресурсы, так как сложно определить расположение кода подписки на `AssemblyResolve`, которое будет гарантировать выполнение подписки до исполнения любого другого кода этой сборки.
 
-Приемущества:
+Преимущества:
 
 * Можно очень гибко управлять процессом поиска требуемой версии сборки и т.п.
 * Сборки в embedded-ресурсах можно сжать, например, с помощью класса `System.IO.Compression.GZipStream` и распаковывать во время поиска, тем самым получая меньший размер exe-файла.

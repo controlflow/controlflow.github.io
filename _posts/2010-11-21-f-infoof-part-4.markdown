@@ -8,9 +8,8 @@ tags: fsharp infoof events eventof first-class events quotations pattern-matchin
 Я надеялся ограничить серию постов тремя записями, но вдруг вспомнил, что совсем забыл ещё один интересный метод – `eventof`, возвращающий экземпляр `System.Reflection.EventInfo` по выражению доступа к событию. Вот только сначала надо разобраться, что есть *«выражение доступа к событию»* в языке F#. Дело в том, что событие в CLI – это всего лишь два метода (`add_EventName` и `remove_EventName`) и метаинформация, объединяющая их.
 
 {% highlight C# %}
-class Foo
-{
-    public event EventHandler Completed;
+class Foo {
+  public event EventHandler Completed;
 }
 {% endhighlight %}
 
@@ -26,19 +25,19 @@ foo.Completed -= SomeMethodName;
 
 {% highlight fsharp %}
 type Foo() =
-     let bar = Event<int>()
-     let baz = Event<int>()
+  let bar = Event<int>()
+  let baz = Event<int>()
 
-     [<CLIEvent>]
-     member __.Bar = bar.Publish
-     member __.Baz = baz.Publish
+  [<CLIEvent>]
+  member __.Bar = bar.Publish
+  member __.Baz = baz.Publish
 {% endhighlight %}
 
 Теперь, например, можно сложить оба события в список и подписаться на них в цикле:
 
 {% highlight fsharp %}
 for e in [ foo.Bar; foo.Baz ] do
-    e.AddHandler(fun _ _ -> printfn "!")
+  e.AddHandler(fun _ _ -> printfn "!")
 {% endhighlight %}
 
 Вопрос в том, что собой представляют выражения `foo.Bar` и `foo.Baz`, а ответит на этот вопрос система цитирования F#:
@@ -74,23 +73,23 @@ let foo = Foo()
 
 {% highlight fsharp %}
 let eventof expr =
-    match expr with
-    | Call(None, createEvent, [
-            Lambda(arg1, Call(_,    addHandler, [ Var var1 ]))
-            Lambda(arg2, Call(_, removeHandler, [ Var var2 ]))
-            Lambda(_, NewDelegate _)
-          ])
-      when createEvent.Name = "CreateEvent"
-        &&    addHandler.Name.StartsWith("add_")
-        && removeHandler.Name.StartsWith("remove_")
-        && arg1 = var1
-        && arg2 = var2 ->
-           addHandler.DeclaringType.GetEvent(
-               addHandler.Name.Remove(0, 4), // имя события
-               BindingFlags.Public ||| BindingFlags.Instance |||
-               BindingFlags.Static ||| BindingFlags.NonPublic)
+  match expr with
+  | Call(None, createEvent, [
+          Lambda(arg1, Call(_,    addHandler, [ Var var1 ]))
+          Lambda(arg2, Call(_, removeHandler, [ Var var2 ]))
+          Lambda(_, NewDelegate _)
+        ])
+    when createEvent.Name = "CreateEvent"
+      &&    addHandler.Name.StartsWith("add_")
+      && removeHandler.Name.StartsWith("remove_")
+      && arg1 = var1
+      && arg2 = var2 ->
+         addHandler.DeclaringType.GetEvent(
+             addHandler.Name.Remove(0, 4), // имя события
+             BindingFlags.Public ||| BindingFlags.Instance |||
+             BindingFlags.Static ||| BindingFlags.NonPublic)
 
-    | _ -> failwith "Not a event expression"
+  | _ -> failwith "Not a event expression"
 {% endhighlight %}
 
 То есть ищем вызов метода с именем `CreateEvent`, получающего три анонимных функции в качестве параметров, две из которых содержат внутри вызов методов с именами, начинающимися на `add_` и `remove_`. Далее из имени метода подписки выделяется имя события, путём удаления префикса `add_` в начале строки и производится поиск в типе, определяющим метод подписки, событие с данным именем. Проверяем:
