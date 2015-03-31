@@ -25,13 +25,9 @@ tags: csharp postsharp aop memoize aspect
 /// атрибутом. Методы с ref-/out-параметрами не поддерживаются.
 /// </summary>
 [Serializable, AttributeUsage(AttributeTargets.Method)]
-public sealed class MemoizeAttribute
-    : MethodInterceptionAspect, IInstanceScopedAspect
+public sealed class MemoizeAttribute : MethodInterceptionAspect, IInstanceScopedAspect
 {
-    /// <summary>
-    /// Указывает, должен ли метод поддерживать
-    /// корректную работу в многопоточной среде.
-    /// </summary>
+    // Указывает, должен ли метод корректно поддерживать работу в многопоточной среде.
     public bool IsThreadSafe { get; set; }
 {% endhighlight %}
 
@@ -43,35 +39,27 @@ public sealed class MemoizeAttribute
 /// <summary>
 /// Процедура валидации использования аспекта мемоизации.
 /// </summary>
-public override bool CompileTimeValidate(MethodBase method)
-{
-    var mi = (MethodInfo) method;
-    if (mi.ReturnType == typeof(void))
-    {
-        throw new InvalidOperationException(
-            "Аспект следует применять только " +
-            "на методы, возвращающие значение.");
-    }
+public override bool CompileTimeValidate(MethodBase method) {
+  var mi = (MethodInfo) method;
+  if (mi.ReturnType == typeof(void)) {
+    throw new InvalidOperationException(
+      "Аспект следует применять только на методы, возвращающие значение.");
+  }
 
-    var paremeters = mi.GetParameters();
-    if (paremeters.Length == 0)
-    {
-        throw new InvalidOperationException(
-            "Аспект следует применять только " +
-            "на методы, имеющие параметры.");
-    }
+  var paremeters = mi.GetParameters();
+  if (paremeters.Length == 0) {
+    throw new InvalidOperationException(
+      "Аспект следует применять только на методы, имеющие параметры.");
+  }
 
-    foreach (var parameter in paremeters)
-    {
-        if (parameter.IsIn || parameter.IsOut)
-        {
-            throw new InvalidOperationException(
-                "Аспект невозможно использовать с методами, " +
-                "обладающими ref-/out-параметрами.");
-        }
+  foreach (var parameter in paremeters) {
+    if (parameter.IsIn || parameter.IsOut) {
+      throw new InvalidOperationException(
+        "Аспект невозможно использовать с методами, обладающими ref-/out-параметрами.");
     }
+  }
 
-    return true;
+  return true;
 }
 {% endhighlight %}
 
@@ -83,9 +71,8 @@ public override bool CompileTimeValidate(MethodBase method)
 [Serializable]
 abstract class MemoCache
 {
-    public abstract bool TryResolve(object arg, out object result);
-    public abstract void AppendItem(
-        Arguments arg, int index, object result);
+  public abstract bool TryResolve(object arg, out object result);
+  public abstract void AppendItem(Arguments arg, int index, object result);
 }
 {% endhighlight %}
 
@@ -95,42 +82,33 @@ abstract class MemoCache
 [Serializable]
 abstract class MemoCache<T, TResult> : MemoCache
 {
-    static readonly Func<MemoCache> NestedCacheFactory;
+  static readonly Func<MemoCache> NestedCacheFactory;
 
-    static MemoCache()
-    {
-        // если элементами кэша данного типа
-        // являются другие вложенные кэши
-        if (typeof(TResult).IsSubclassOf(typeof(MemoCache)))
-        {
-            NestedCacheFactory =
-                GetCacheFactory(typeof(TResult));
-        }
+  static MemoCache() {
+    // если элементами кэша данного типа
+    // являются другие вложенные кэши
+    if (typeof(TResult).IsSubclassOf(typeof(MemoCache))) {
+      NestedCacheFactory = GetCacheFactory(typeof(TResult));
     }
+  }
 
-    protected abstract void AppendImpl(T arg, TResult result);
+  protected abstract void AppendImpl(T arg, TResult result);
 
-    public sealed override void AppendItem(
-        Arguments arg, int index, object result)
-    {
-        if (NestedCacheFactory == null)
-        {
-            // тривиально добавляем в кэш
-            AppendImpl((T) arg[index], (TResult) result);
-        }
-        else
-        {
-            // создаём экземпляр вложенного кэша
-            var nested = NestedCacheFactory();
+  public sealed override void AppendItem(Arguments arg, int index, object result) {
+    if (NestedCacheFactory == null) {
+      // тривиально добавляем в кэш
+      AppendImpl((T) arg[index], (TResult) result);
+    } else {
+      // создаём экземпляр вложенного кэша
+      var nested = NestedCacheFactory();
+      AppendImpl( // и добавляем его в кэш
+        (T) arg[index],
+        (TResult) (object) nested);
 
-            AppendImpl( // и добавляем его в кэш
-                (T) arg[index],
-                (TResult) (object) nested);
-
-            // кэшируем следующий аргумент
-            nested.AppendItem(arg, index + 1, result);
-        }
+      // кэшируем следующий аргумент
+      nested.AppendItem(arg, index + 1, result);
     }
+  }
 }
 {% endhighlight %}
 
@@ -151,36 +129,28 @@ SomeCache<int, SomeCache<string, SomeCache<decimal, int>>>
 /// Вариант кэша на базе обычного словаря.
 /// </summary>
 [Serializable]
-sealed class DictionaryCache<T, TResult>
-                 : MemoCache<T, TResult>
+sealed class DictionaryCache<T, TResult> : MemoCache<T, TResult>
 {
-    readonly Dictionary<T, TResult> cache
-        = new Dictionary<T, TResult>();
+  readonly Dictionary<T, TResult> cache = new Dictionary<T, TResult>();
 
-    public static MemoCache CreateInstance()
-    {
-        return new DictionaryCache<T, TResult>();
-    }
+  public static MemoCache CreateInstance() {
+    return new DictionaryCache<T, TResult>();
+  }
 
-    public override bool TryResolve(object arg, out object result)
-    {
-        TResult value;
-        if (cache.TryGetValue((T) arg, out value))
-        {
-            result = value;
-            return true;
-        }
-        else
-        {
-            result = null;
-            return false;
-        }
+  public override bool TryResolve(object arg, out object result) {
+    TResult value;
+    if (cache.TryGetValue((T) arg, out value)) {
+      result = value;
+      return true;
+    } else {
+      result = null;
+      return false;
     }
+  }
 
-    protected override void AppendImpl(T arg, TResult result)
-    {
-        cache.Add(arg, result);
-    }
+  protected override void AppendImpl(T arg, TResult result) {
+    cache.Add(arg, result);
+  }
 }
 {% endhighlight %}
 
@@ -192,13 +162,13 @@ sealed class DictionaryCache<T, TResult>
 /// </summary>
 static Func<MemoCache> GetCacheFactory(Type cacheType)
 {
-    // ищем метод "public static MemoCache CreateInstance()"
-    var methodInfo = cacheType.GetMethod(
-        "CreateInstance", BindingFlags.Static | BindingFlags.Public);
+  // ищем метод "public static MemoCache CreateInstance()"
+  var methodInfo = cacheType.GetMethod(
+    "CreateInstance", BindingFlags.Static | BindingFlags.Public);
 
-    // и создаём из него делегат для быстрого создания экземпляров
-    return (Func<MemoCache>)
-        Delegate.CreateDelegate(typeof(Func<MemoCache>), methodInfo);
+  // и создаём из него делегат для быстрого создания экземпляров
+  return (Func<MemoCache>)
+    Delegate.CreateDelegate(typeof(Func<MemoCache>), methodInfo);
 }
 {% endhighlight %}
 
@@ -209,36 +179,28 @@ static Func<MemoCache> GetCacheFactory(Type cacheType)
 /// Вариант кэша на базе конкурентного словаря.
 /// </summary>
 [Serializable]
-sealed class ConcurrentCache<T, TResult>
-                 : MemoCache<T, TResult>
+sealed class ConcurrentCache<T, TResult> : MemoCache<T, TResult>
 {
-    readonly ConcurrentDictionary<T, TResult> cache
-        = new ConcurrentDictionary<T, TResult>();
+  readonly ConcurrentDictionary<T, TResult> cache = new ConcurrentDictionary<T, TResult>();
 
-    public static MemoCache CreateInstance()
-    {
-        return new ConcurrentCache<T, TResult>();
-    }
+  public static MemoCache CreateInstance() {
+    return new ConcurrentCache<T, TResult>();
+  }
 
-    public override bool TryResolve(object arg, out object result)
-    {
-        TResult value;
-        if (cache.TryGetValue((T) arg, out value))
-        {
-            result = value;
-            return true;
-        }
-        else
-        {
-            result = null;
-            return false;
-        }
+  public override bool TryResolve(object arg, out object result) {
+    TResult value;
+    if (cache.TryGetValue((T) arg, out value)) {
+      result = value;
+      return true;
+    } else {
+      result = null;
+      return false;
     }
+  }
 
-    protected override void AppendImpl(T arg, TResult result)
-    {
-        cache.AddOrUpdate(arg, result, (_, x) => x);
-    }
+  protected override void AppendImpl(T arg, TResult result) {
+    cache.AddOrUpdate(arg, result, (_, x) => x);
+  }
 }
 {% endhighlight %}
 
@@ -249,28 +211,23 @@ sealed class ConcurrentCache<T, TResult>
 /// Создаёт тип кэша, соответствующий типам параметров
 /// заданного метода и требованиям к многопоточной работе.
 /// </summary>
-Type GetRootCacheType(MethodInfo method)
-{
-    Debug.Assert(method != null);
+Type GetRootCacheType(MethodInfo method) {
+  Debug.Assert(method != null);
 
-    var parameters = method.GetParameters();
-    var resultType = method.ReturnType;
+  var parameters = method.GetParameters();
+  var resultType = method.ReturnType;
 
-    // определяем тип используемого кэша
-    var cacheType = IsThreadSafe
-        ? typeof(ConcurrentCache<,>)
-        : typeof(DictionaryCache<,>);
+  // определяем тип используемого кэша
+  var cacheType = IsThreadSafe ? typeof(ConcurrentCache<,>) : typeof(DictionaryCache<,>);
 
-    // перебираем параметры с конца
-    for (int i = parameters.Length - 1; i >= 0; i--)
-    {
-        // формируем тип "Cache<T1, Cache<T2, Cache<T3, TResult>>>",
-        // в котором типы T1, T2, T3 соответствуют параметрам метода:
-        resultType = cacheType.MakeGenericType(
-            parameters[i].ParameterType, resultType);
-    }
+  // перебираем параметры с конца
+  for (int i = parameters.Length - 1; i >= 0; i--) {
+    // формируем тип "Cache<T1, Cache<T2, Cache<T3, TResult>>>",
+    // в котором типы T1, T2, T3 соответствуют параметрам метода:
+    resultType = cacheType.MakeGenericType(parameters[i].ParameterType, resultType);
+  }
 
-    return resultType;
+  return resultType;
 }
 {% endhighlight %}
 
@@ -284,31 +241,26 @@ MemoCache cacheRoot;
 /// <summary>
 /// Обработчик вызова мемоизируемого метода.
 /// </summary>
-public override void OnInvoke(MethodInterceptionArgs args)
-{
-    MemoCache argCache = this.cacheRoot;
-    Arguments arguments = args.Arguments;
-    object result = null;
-    int index = 0;
+public override void OnInvoke(MethodInterceptionArgs args) {
+  MemoCache argCache = this.cacheRoot;
+  Arguments arguments = args.Arguments;
+  object result = null;
+  int index = 0;
 
-LookupArg: // последовательно извлекаем значения из кэшей
-    if (argCache.TryResolve(arguments[index++], out result))
+  LookupArg: // последовательно извлекаем значения из кэшей
+  if (argCache.TryResolve(arguments[index++], out result)) {
+    // если не последний аргумент, то кэш
+    if (index < arguments.Count)
     {
-        // если не последний аргумент, то кэш
-        if (index < arguments.Count)
-        {
-            argCache = (MemoCache) result;
-            goto LookupArg; // да, это goto!
-        }
+        argCache = (MemoCache) result;
+        goto LookupArg; // да, это goto!
+    }
 
-        args.ReturnValue = result;
-    }
-    else // промах кэша, вызываем метод и кэшируем
-    {
-        args.Proceed();
-        argCache.AppendItem(
-            arguments, index - 1, args.ReturnValue);
-    }
+    args.ReturnValue = result;
+  } else { // промах кэша, вызываем метод и кэшируем
+    args.Proceed();
+    argCache.AppendItem(arguments, index - 1, args.ReturnValue);
+  }
 }
 {% endhighlight %}
 
@@ -323,15 +275,14 @@ static Func<MemoCache> RootCacheFactory;
 /// Статическая инициализация аспекта,
 /// создаёт кэш для мемоизации статических методов.
 /// </summary>
-public override void RuntimeInitialize(MethodBase method)
-{
-    var type = GetRootCacheType((MethodInfo) method);
-    RootCacheFactory = GetCacheFactory(type);
+public override void RuntimeInitialize(MethodBase method) {
+  var type = GetRootCacheType((MethodInfo) method);
+  RootCacheFactory = GetCacheFactory(type);
 
-    if (method.IsStatic)
-        this.cacheRoot = RootCacheFactory();
+  if (method.IsStatic)
+    this.cacheRoot = RootCacheFactory();
 
-    base.RuntimeInitialize(method);
+  base.RuntimeInitialize(method);
 }
 {% endhighlight %}
 
@@ -339,23 +290,20 @@ public override void RuntimeInitialize(MethodBase method)
 
 {% highlight C# %}
 /// <summary>
-/// Создание экземпляра аспкета уровня экземпляра,
-/// попадает в конструктор типа, экземплярный метод
-/// которого подвергается аспекту мемоизации.
+/// Создание экземпляра аспкета уровня экземпляра, попадает в конструктор типа,
+/// экземплярный метод которого подвергается аспекту мемоизации.
 /// </summary>
-public object CreateInstance(AdviceArgs adviceArgs)
-{
-    return new MemoizeAttribute {
-        IsThreadSafe = this.IsThreadSafe
-    };
+public object CreateInstance(AdviceArgs adviceArgs) {
+  return new MemoizeAttribute {
+      IsThreadSafe = this.IsThreadSafe
+  };
 }
 
 /// <summary>
 /// Инициализация аспекта уровня экземпляра.
 /// </summary>
-public void RuntimeInitializeInstance()
-{
-    this.cacheRoot = RootCacheFactory();
+public void RuntimeInitializeInstance() {
+  this.cacheRoot = RootCacheFactory();
 }
 {% endhighlight %}
 
@@ -364,73 +312,68 @@ public void RuntimeInitializeInstance()
 Всё, можно тестировать аспект на всеми любимых факториалах:
 
 {% highlight C# %}
-class Foo
-{
-    [Memoize]
-    static int StaticFact(int x)
-    {
-        Console.WriteLine("=> StaticFact({0}) call", x);
+class Foo {
+  [Memoize]
+  static int StaticFact(int x) {
+      Console.WriteLine("=> StaticFact({0}) call", x);
 
-        if (x == 0) return 1;
-        return x * StaticFact(x - 1);
-    }
+    if (x == 0) return 1;
+    return x * StaticFact(x - 1);
+  }
 
-    [Memoize(IsThreadSafe=true)]
-    int InstanceFact(int x)
-    {
-        Console.WriteLine("=> InstanceFact({0}) call", x);
+  [Memoize(IsThreadSafe=true)]
+  int InstanceFact(int x) {
+    Console.WriteLine("=> InstanceFact({0}) call", x);
 
-        return Enumerable
-            .Range(1, x)
-            .Aggregate(1, (a, b) => a * b);
-    }
+    return Enumerable
+      .Range(1, x)
+      .Aggregate(1, (a, b) => a * b);
+  }
 
-    static void Main()
-    {
-        Action<string, object> wl = Console.WriteLine;
+  static void Main() {
+    Action<string, object> wl = Console.WriteLine;
 
-        wl("SataticFact(2) = {0}", StaticFact(2));
-        wl("SataticFact(2) = {0}", StaticFact(2));
-        wl("SataticFact(7) = {0}", StaticFact(7));
-        wl("SataticFact(7) = {0}", StaticFact(7));
+    wl("SataticFact(2) = {0}", StaticFact(2));
+    wl("SataticFact(2) = {0}", StaticFact(2));
+    wl("SataticFact(7) = {0}", StaticFact(7));
+    wl("SataticFact(7) = {0}", StaticFact(7));
 
-        Console.WriteLine();
+    Console.WriteLine();
 
-        var a = new Foo();
-        var b = new Foo();
+    var a = new Foo();
+    var b = new Foo();
 
-        wl("a.InstanceFact(7) = {0}", a.InstanceFact(7));
-        wl("a.InstanceFact(7) = {0}", a.InstanceFact(7));
+    wl("a.InstanceFact(7) = {0}", a.InstanceFact(7));
+    wl("a.InstanceFact(7) = {0}", a.InstanceFact(7));
 
-        wl("b.InstanceFact(7) = {0}", b.InstanceFact(7));
-        wl("b.InstanceFact(7) = {0}", b.InstanceFact(7));
-    }
+    wl("b.InstanceFact(7) = {0}", b.InstanceFact(7));
+    wl("b.InstanceFact(7) = {0}", b.InstanceFact(7));
+  }
 }
 {% endhighlight %}
 
 Обратите внимание на различие в реализации. Вывод данного примера:
 
-```
-=> StaticFact(2) call
-=> StaticFact(1) call
-=> StaticFact(0) call
-SataticFact(2) = 2
-SataticFact(2) = 2
-=> StaticFact(7) call
-=> StaticFact(6) call
-=> StaticFact(5) call
-=> StaticFact(4) call
-=> StaticFact(3) call
-SataticFact(7) = 5040
-SataticFact(7) = 5040
+    => StaticFact(2) call
+    => StaticFact(1) call
+    => StaticFact(0) call
+    SataticFact(2) = 2
+    SataticFact(2) = 2
+    => StaticFact(7) call
+    => StaticFact(6) call
+    => StaticFact(5) call
+    => StaticFact(4) call
+    => StaticFact(3) call
+    SataticFact(7) = 5040
+    SataticFact(7) = 5040
 
-=> InstanceFact(7) call
-a.InstanceFact(7) = 5040
-a.InstanceFact(7) = 5040
-=> InstanceFact(7) call
-b.InstanceFact(7) = 5040
-b.InstanceFact(7) = 5040
-```
+    => InstanceFact(7) call
+    a.InstanceFact(7) = 5040
+    a.InstanceFact(7) = 5040
+    => InstanceFact(7) call
+    b.InstanceFact(7) = 5040
+    b.InstanceFact(7) = 5040
+
 Красиво и очень просто, не правда ли? Стоит отметить, что данная мемоизация не считает исключения, выбрасываемые мемоизируемым методом, за возвращаемое значение и не кэширует их, а просто пропускает в клиентский код.
 
 Полный код этого поста доступен [здесь](http://pastebin.com/Mk6NuUMH). Happy PostSharping!

@@ -9,12 +9,12 @@ tags: fsharp memoize generics curried closure
 
 {% highlight fsharp %}
 let memoize f =
-    let cache = System.Collections.Generic.Dictionary()
-    fun x -> match cache.TryGetValue x with
-             | true, result -> result
-             | _ -> let result = f x
-                    cache.Add(x, result)
-                    result
+  let cache = System.Collections.Generic.Dictionary()
+  fun x -> match cache.TryGetValue x with
+           | true, result -> result
+           | _ -> let result = f x
+                  cache.Add(x, result)
+                  result
 {% endhighlight %}
 
 Испытываем:
@@ -32,13 +32,12 @@ printfn "f 1 = %d" (f 1)
 
 Вывод:
 
-```
-f invoked!
-f(1)=2
-f invoked!
-f(2)=3
-f(1)=2
-```
+    f invoked!
+    f(1)=2
+    f invoked!
+    f(2)=3
+    f(1)=2
+
 Как и ожидалось, а что насчёт нескольких аргументов, заданных в виде кортежа?
 
 {% highlight fsharp %}
@@ -54,13 +53,12 @@ printfn "g (1,1) = %d" (g (1,1))
 
 Вывод:
 
-```
-add invoked!
-g (1,1) = 2
-add invoked!
-g (1,2) = 3
-g (1,1) = 2
-```
+    add invoked!
+    g (1,1) = 2
+    add invoked!
+    g (1,2) = 3
+    g (1,1) = 2
+
 Тоже всё ок, так как для типов кортежей определены правила проверки на эквивалентность и вычисления хэш-значения, а значит аргументы в кортеже без проблем находятся в кэше. Но когда дело доходит до функций с аргументами в каррированной форме:
 
 {% highlight fsharp %}
@@ -76,14 +74,13 @@ printfn "g 1 1 = %d" (g 1 1)
 
 То мемоизация перестаёт работать:
 
-```
-add invoked!
-g 1 1 = 2
-add invoked!
-g 1 2 = 3
-add invoked!
-g 1 1 = 2
-```
+    add invoked!
+    g 1 1 = 2
+    add invoked!
+    g 1 2 = 3
+    add invoked!
+    g 1 1 = 2
+
 Чтобы понять, почему так происходит, достаточно лишь взглянуть на сигнатуры функций `memoize` и `add`:
 
 {% highlight fsharp %}
@@ -108,33 +105,32 @@ let private funcDef = typedefof<Func<_,_>>
 
 /// Флаги поиска приватного статического метода
 let private staticPrivate =
-    Reflection.BindingFlags.Static |||
-    Reflection.BindingFlags.NonPublic
+  Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic
 
 /// Тип, параметризуемый типом возвращаемого
 /// значения функции, подвергаемой мемоизации
 type private AnyMemoizer<'T>() =
 
-    static let memo : Func<'T,'T> =
-       match typeof<'T> with
+  static let memo : Func<'T,'T> =
+    match typeof<'T> with
 
-       // если возвращаемое значение является функцией F#
-       | t when FSharpType.IsFunction t ->
-           // тип аргумента и возвращаемого значения
-           let targ, tres = FSharpType.GetFunctionElements t
-           // отражение метода мемоизации,
-           // соответствующее данным типам
-           let runMethod = typeof<FuncMemoizer>
-                             .GetMethod("Run", staticPrivate)
-                             .GetGenericMethodDefinition()
-                             .MakeGenericMethod [| targ; tres |]
-           // тип делегата, "пропускающего"
-           // через себя возвращаемые значения
-           let delType = funcDef.MakeGenericType [| t; t |]
-           // создаём делегат из метода мемоизации
-           downcast Delegate.CreateDelegate(delType, runMethod)
+    // если возвращаемое значение является функцией F#
+    | t when FSharpType.IsFunction t ->
+      // тип аргумента и возвращаемого значения
+      let targ, tres = FSharpType.GetFunctionElements t
+      // отражение метода мемоизации,
+      // соответствующее данным типам
+      let runMethod = typeof<FuncMemoizer>
+                        .GetMethod("Run", staticPrivate)
+                        .GetGenericMethodDefinition()
+                        .MakeGenericMethod [| targ; tres |]
+      // тип делегата, "пропускающего"
+      // через себя возвращаемые значения
+      let delType = funcDef.MakeGenericType [| t; t |]
+      // создаём делегат из метода мемоизации
+      downcast Delegate.CreateDelegate(delType, runMethod)
 
-       | _ -> null // иначе ничего не делаем
+    | _ -> null // иначе ничего не делаем
 
     // так как let-привязки в определениях типов всегда
     // private-видимости, то создаём публичный метод
@@ -143,22 +139,23 @@ type private AnyMemoizer<'T>() =
 /// Тип, содержащий generic-метод мемоизации
 and private FuncMemoizer =
 
-    static member Run (f: 'a -> 'b) =
-       let cache = Collections.Generic.Dictionary()
+  static member Run (f: 'a -> 'b) =
+    let cache = Collections.Generic.Dictionary()
 
-       // если возвращаемое значение - функция F#
-       if FSharpType.IsFunction typeof<'b> then
-          fun x -> match cache.TryGetValue x with
-                   | true, result -> result
-                   | _ -> // мемоизация возвращаемой функции
-                          let result = AnyMemoizer<'b>.Run(f x)
-                          cache.Add(x, result); result
-
-       else // иначе обычная мемоизация
-          fun x -> match cache.TryGetValue x with
-                   | true, result -> result
-                   | _ -> let result = f x
-                          cache.Add(x, result); result
+    // если возвращаемое значение - функция F#
+    if FSharpType.IsFunction typeof<'b> then
+      fun x -> match cache.TryGetValue x with
+               | true, result -> result
+               | _ -> // мемоизация возвращаемой функции
+                      let result = AnyMemoizer<'b>.Run(f x)
+                      cache.Add(x, result)
+                      result
+    else // иначе обычная мемоизация
+      fun x -> match cache.TryGetValue x with
+               | true, result -> result
+               | _ -> let result = f x
+                      cache.Add(x, result)
+                      result
 
 /// Мемоизация функций с аргументами в каррированной форме
 let curried f = FuncMemoizer.Run f
@@ -179,19 +176,18 @@ printfn "g 1 1 = %d" (g 1 1)
 
 Вывод:
 
-```
-add invoked!
-g 1 1 = 2
-add invoked!
-g 1 2 = 3
-g 1 1 = 2
-```
+    add invoked!
+    g 1 1 = 2
+    add invoked!
+    g 1 2 = 3
+    g 1 1 = 2
+
 Теперь всё работает как и ожидалось, давайте задумаемся о недостатках… Самый большой недостаток данной реализации в том, что невозможно контролировать глубину мемоизации. То есть если исходная мемоизируемая функция с аргументами в каррированной форме возвращает другие функции, то они тоже будут мемоизированы:
 
 {% highlight fsharp %}
 let func x y =
-    fun a -> printfn "lambda invoked!"
-             x + y + a
+  fun a -> printfn "lambda invoked!"
+           x + y + a
 
 let f = Memoize.curried func
 
@@ -210,9 +206,9 @@ lambda invoked!
 
 {% highlight fsharp %}
 let func x y =
-    printfn "func invoked!"
-    fun a -> printfn "lambda invoked!"
-             x + y + a
+  printfn "func invoked!"
+  fun a -> printfn "lambda invoked!"
+           x + y + a
 
 let f = Memoize.curried 3 func
 let g = Memoize.curried 2 func
@@ -228,19 +224,18 @@ printfn "(g 1 2) 3 = %d" ((g 1 2) 3)
 
 Вывод:
 
-```
-3 args =======
-func invoked!
-lambda invoked!
-(f 1 2) 3 = 6
-(f 1 2) 3 = 6
-2 args =======
-func invoked!
-lambda invoked!
-(g 1 2) 3 = 6
-lambda invoked!
-(g 1 2) 3 = 6
-```
+    3 args =======
+    func invoked!
+    lambda invoked!
+    (f 1 2) 3 = 6
+    (f 1 2) 3 = 6
+    2 args =======
+    func invoked!
+    lambda invoked!
+    (g 1 2) 3 = 6
+    lambda invoked!
+    (g 1 2) 3 = 6
+
 Ещё один небольшой недостаток данной реализации - использование памяти. Дело в том, что во всех кэшах, кроме самых внешних, хранится функция с частично применёнными аргументами в замыкании + те же аргументы являются ключами словарей. Это легко увидеть в отладчике VisualStudio на таком коде:
 
 {% highlight fsharp %}
@@ -255,7 +250,7 @@ let fe = fd 5
 let ff = fe 6
 {% endhighlight %}
 
-![](http://media.tumblr.com/tumblr_le3xhplh5m1qdrm28.png)
+![]({{ site.baseurl }}/images/fsharp-memoize.png)
 
 То есть замыкание, получаемое при частичном применении аргумента, содержит этот аргумент в поле + ссылку на исходное значение функционального типа.
 
