@@ -24,8 +24,8 @@ Console.WriteLine(x == x.GetEnumerator()); // false
 {% highlight C# %}
 var y = Bar();
 var t = new Thread(() => {
-    Console.WriteLine(y == y.GetEnumerator()); // false
-    Console.WriteLine(y == y.GetEnumerator()); // false
+  Console.WriteLine(y == y.GetEnumerator()); // false
+  Console.WriteLine(y == y.GetEnumerator()); // false
 });
 
 t.Start();

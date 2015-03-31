@@ -9,21 +9,24 @@ tags: fsharp seq ienumerable dispose finally
 
 {% highlight fsharp %}
 let xs = seq {
+  try yield! seq {
     try yield! seq {
-        try yield! seq {
-            try yield ()
-            finally printfn "dispose::3" }
-        finally printfn "dispose::2"; failwith "bar!" }
-    finally printfn "dispose::1" }
+      try yield ()
+      finally printfn "dispose::3"
+    }
+    finally printfn "dispose::2"
+            failwith "bar!"
+  }
+  finally printfn "dispose::1"
+}
 
 for _ in xs do ()
-
 {% endhighlight %}
 
 Вывод оказался следующим: o__O
 
-> dispose::3
-> dispose::2
+> dispose::3<br/>
+> dispose::2<br/>
 > dispose::1
 
 То есть после исключения в finally отработал внешний finally и исключение успешно долетело до вызывающей стороны… А я всего лишь удалил бросание исключения в самом вложенном генераторе…
@@ -34,19 +37,24 @@ for _ in xs do ()
 
 {% highlight fsharp %}
 let xs = seq {
+  try yield! seq {
     try yield! seq {
-        try yield! seq {
-            try yield ()
-            finally printfn "dispose::3"; failwith "foo!" }
-        finally printfn "dispose::2"; failwith "bar!" }
-    finally printfn "dispose::1" }
+      try yield ()
+      finally printfn "dispose::3"
+              failwith "foo!"
+    }
+    finally printfn "dispose::2"
+            failwith "bar!"
+  }
+  finally printfn "dispose::1"
+}
 
 for _ in xs do ()
 {% endhighlight %}
 
 Всё встаёт на свои места:
 
-> dispose::3
+> dispose::3<br/>
 > dispose::2
 
 Теперь осталось поразмышлять, возможно ли это запилить простыми изменениями в стандартной библиотеке F#… =)))
