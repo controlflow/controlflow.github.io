@@ -11,19 +11,19 @@ tags: fsharp inline nodynamicinvocation generics reflection peverify csharp
 
 {% highlight fsharp %}
 type Foo() =
-     // member inline InlineAdd:
-     //     ^a * ^a -> ^a when ^a: (static member (+): ^a * ^a -> ^a)
-     member inline __.InlineAdd(x: ^a, y: ^a): ^a = x + y
+  // member inline InlineAdd:
+  //     ^a * ^a -> ^a when ^a: (static member (+): ^a * ^a -> ^a)
+  member inline __.InlineAdd(x: ^a, y: ^a): ^a = x + y
 
-     [<NoDynamicInvocation>]
-     member inline __.NoDynAdd (x: ^a, y: ^a): ^a = x + y
+  [<NoDynamicInvocation>]
+  member inline __.NoDynAdd (x: ^a, y: ^a): ^a = x + y
 
-     // member inline MemberConstraint:
-     //     unit -> ^a when ^a: (static member Parse: string -> ^a)
-     member inline __.MemberConstraint() =
-            printfn "Parsing '123' string..."
-            // вызов через member constraint:
-            (^a: (static member Parse: string -> ^a) "123")
+  // member inline MemberConstraint:
+  //     unit -> ^a when ^a: (static member Parse: string -> ^a)
+  member inline __.MemberConstraint() =
+    printfn "Parsing '123' string..."
+    // вызов через member constraint:
+    (^a: (static member Parse: string -> ^a) "123")
 {% endhighlight %}
 
 Данный код прекрасно работает, когда типы всех типов-параметров известны на момент компиляции (собственно, типы-параметры вида `^a` в F# и называются *statically resolved type variable*), через методы `InlineAdd` и `NoDynAdd` можно складывать значения любых типов, поддерживающих оператор сложения:
@@ -51,9 +51,9 @@ val res4 : int = 123
 
 {% highlight fsharp %}
 let [ add; noDyn; memberConstr ] =
-    List.map (typeof<Foo>.GetMethod) [ "InlineAdd"
-                                       "NoDynAdd"
-                                       "MemberConstraint" ]
+  List.map (typeof<Foo>.GetMethod) [ "InlineAdd"
+                                     "NoDynAdd"
+                                     "MemberConstraint" ]
 {% endhighlight %}
 
 Теперь можно вручную задать тип-параметр методу `InlineAdd` и вызвать его через рефлексию со значениями типа `int` и `decimal`:
@@ -67,18 +67,17 @@ let res2 = add.MakeGenericMethod(typeof<decimal>)
 {% endhighlight %}
 
 Вызовы происходят успешно:
+    
+    val res1 : obj = 3
+    val res2 : obj = 3M
 
-```
-val res1 : obj = 3
-val res2 : obj = 3M
-```
 Метод успешно работает даже с пользовательскими типами, определяющими оператор (+) и это замечательно:
 
 {% highlight fsharp %}
 type Bar(value: int) =
-     member __.Value = value
-     override __.ToString() = sprintf "Bar(%d)" value
-     static member (+) (l: Bar, r: Bar) = Bar(l.Value + r.Value)
+  member __.Value = value
+  override __.ToString() = sprintf "Bar(%d)" value
+  static member (+) (l: Bar, r: Bar) = Bar(l.Value + r.Value)
 
 let res3 = add.MakeGenericMethod(typeof<Bar>)
               .Invoke(foo, [| box (Bar 1); box (Bar 2) |])
@@ -93,32 +92,28 @@ let res4 = noDyn.MakeGenericMethod(typeof<int>)
 
 Нарываемся на исключение:
 
-```
-System.NotSupportedException: Specified method is not supported.
-   at FSI_0032.Foo.NoDynAdd[a](a x, a y)
-```
+    System.NotSupportedException: Specified method is not supported.
+       at FSI_0032.Foo.NoDynAdd[a](a x, a y)
+
 Всё дело в том, как F# компилирует данные методы. Метод `InlineAdd` выглядит следующим образом (C#):
 
 {% highlight C# %}
-public a InlineAdd<a>(a x, a y)
-{
-    return LanguagePrimitives.AdditionDynamic<a, a, a>(x, y);
+public a InlineAdd<a>(a x, a y) {
+  return LanguagePrimitives.AdditionDynamic<a, a, a>(x, y);
 }
 {% endhighlight %}
 
 Где метод `AdditionDynamic` - часть инфраструктуры среды исполнения F#, позволяющая обращаться к операторам `(+)` для различных типов, известных на момент выполнения. Если для типа `^a` оператор `(+)` определён не будет, метод `AdditionDynamic` выбросит исключение с весьма непонятным описанием:
 
-```
-System.NotSupportedException:
-Dynamic invocation of op_Addition involving coercions is not supported.
-```
+> **System.NotSupportedException:**<br/>
+> Dynamic invocation of op_Addition involving coercions is not supported.
+
 Не трудно догадаться, что для `inline`-методов, отмеченных атрибутом `[<NoDynamicInvocation>]`, генерируются лишь заглушки, выбрасывающие исключение типа `NotSupportedException`, а само тело метода хранится лишь в метаданных F#-сборки (в любом случае):
 
 {% highlight C# %}
 [NoDynamicInvocation]
-public a NoDynAdd<a>(a x, a y)
-{
-    throw new NotSupportedException();
+public a NoDynAdd<a>(a x, a y) {
+  throw new NotSupportedException();
 }
 {% endhighlight %}
 
@@ -131,19 +126,17 @@ let res5 = memberConstr.MakeGenericMethod(typeof<int>)
 
 Однако обратите внимание на side-effect перед возбуждением исключения и тот факт, что если бы поток исполнения не дошёл бы до вызова через member constraint, то вызов метода вовсе мог бы окончиться успешно:
 
-```
-Parsing '123' string...
-System.NotSupportedException: Specified method is not supported.
-   at FSI_0032.Foo.MemberConstraint[a]()
-```
+    Parsing '123' string...
+    System.NotSupportedException: Specified method is not supported.
+       at FSI_0032.Foo.MemberConstraint[a]()
+
 То есть реально компилируется следующий код:
 
 {% highlight C# %}
-public a MemberConstraint<a>()
-{
-    ExtraTopLevelOperators.PrintFormatLine<Unit>(
-        new PrintfFormat<Unit, TextWriter, Unit, Unit, Unit>("Parsing '123' string..."));
-    throw new NotSupportedException();
+public a MemberConstraint<a>() {
+  ExtraTopLevelOperators.PrintFormatLine<Unit>(
+      new PrintfFormat<Unit, TextWriter, Unit, Unit, Unit>("Parsing '123' string..."));
+  throw new NotSupportedException();
 }
 {% endhighlight %}
 

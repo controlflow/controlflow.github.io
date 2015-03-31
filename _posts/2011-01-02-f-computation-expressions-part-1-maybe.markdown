@@ -15,11 +15,11 @@ tags: fsharp computation expressions monads maybe option
 namespace FSharp.Monads
 
 type MaybeBuilder =
-     new: unit -> MaybeBuilder
-     member Zero: unit -> 'a option
-     member Bind: 'a option * ('a -> 'b option) -> 'b option
-     member Return: 'a -> 'a option
-     member ReturnFrom: 'a option -> 'a option
+  new: unit -> MaybeBuilder
+  member Zero: unit -> 'a option
+  member Bind: 'a option * ('a -> 'b option) -> 'b option
+  member Return: 'a -> 'a option
+  member ReturnFrom: 'a option -> 'a option
 {% endhighlight %}
 
 Реализация:
@@ -28,12 +28,12 @@ type MaybeBuilder =
 namespace FSharp.Monads
 
 type MaybeBuilder() =
-     member b.Zero() = None
-     member b.Bind(x, f) =
-            match x with Some x -> f x
-                       | None   -> None
-     member b.Return x = Some x
-     member b.ReturnFrom x = x : _ option
+  member b.Zero() = None
+  member b.Bind(x, f) =
+    match x with Some x -> f x
+               | None   -> None
+  member b.Return x = Some x
+  member b.ReturnFrom x = x : _ option
 {% endhighlight %}
 
 В качестве пример использования, можно привести программу, которая ожидает ввод пользователем целого числа и пытается найти порядковый номер введённого числа в последовательности простых чисел, при этом в случае не числового ввода или ввода числа, не являющегося простым, программа останавливается и возвращает `None`:
@@ -46,27 +46,27 @@ let maybe = MaybeBuilder()
 
 /// Список простых чисел от 2 до 100
 let primes =
-    let is_prime x = // неэффективно, лишь для примера
-        Seq.forall (fun y -> x % y > 0) { 2 .. x/2 }
-    { 2 .. 100 } |> Seq.filter is_prime
-                 |> Seq.toList
+  let is_prime x = // неэффективно, лишь для примера
+    Seq.forall (fun y -> x % y > 0) { 2 .. x/2 }
+  { 2 .. 100 } |> Seq.filter is_prime
+               |> Seq.toList
 
 /// Попытка считывания с консоли целого числа
 let inputInt32() =
-    maybe {
-       let str = Console.ReadLine()
-       let success, value = Int32.TryParse str
-       if success then return value
-    }
+  maybe {
+   let str = Console.ReadLine()
+   let success, value = Int32.TryParse str
+   if success then return value
+  }
 
 /// Попытка считывания с консоли простого числа
 let tryInputPrime() =
-    maybe {
-      printfn "введите простое число от 2 до 100:"
-      let! prime = inputInt32()
-      let! index = List.tryFindIndex ((=) prime) primes
-      return prime, index + 1
-    }
+  maybe {
+    printfn "введите простое число от 2 до 100:"
+    let! prime = inputInt32()
+    let! index = List.tryFindIndex ((=) prime) primes
+    return prime, index + 1
+  }
 
 match tryInputPrime() with
 | Some(prime, index) ->
@@ -79,11 +79,11 @@ match tryInputPrime() with
 {% highlight fsharp %}
 /// Попытка считывания с консоли целого числа
 let inputInt32'() =
-    let str = Console.ReadLine()
-    let success, value = Int32.TryParse str
-    if success
-       then maybe.Return(value)
-       else maybe.Zero()
+  let str = Console.ReadLine()
+  let success, value = Int32.TryParse str
+  if success
+    then maybe.Return(value)
+    else maybe.Zero()
 {% endhighlight %}
 
 А вот и вся “поднаготная” функции `tryInputPrime`:
@@ -91,14 +91,14 @@ let inputInt32'() =
 {% highlight fsharp %}
 /// Попытка считывания с консоли простого числа
 let tryInputPrime'() =
-    printfn "введите простое число от 2 до 100:"
-    maybe.Bind(
-        inputInt32(),
-        fun prime ->
-            maybe.Bind(
-                List.tryFindIndex ((=) prime) primes,
-                fun index ->
-                    maybe.Return(prime, index + 1)))
+  printfn "введите простое число от 2 до 100:"
+  maybe.Bind(
+    inputInt32(),
+    fun prime ->
+      maybe.Bind(
+        List.tryFindIndex ((=) prime) primes,
+        fun index ->
+          maybe.Return(prime, index + 1)))
 {% endhighlight %}
 
 Обратите так же внимание на модуль `Option` из состава стандартной библиотеки F#, он содержит дополнительные функции для работы со значениями типа `'a option`, такие как `map` и `fold` и другие.

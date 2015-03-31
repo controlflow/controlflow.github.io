@@ -13,19 +13,19 @@ tags: fsharp monads computation expressions cont async callcc
 namespace FSharp.Monads
 
 type Cont<'a, 'result> =
-     Cont of (('a -> 'result) -> 'result)
+  Cont of (('a -> 'result) -> 'result)
 
 [<RequireQualifiedAccess>]
 module Cont =
-     val run: Cont<'a,'r> -> ('a -> 'r) -> 'r
-     val callCC: (('a -> Cont<'b,'r>) -> Cont<'a,'r>) -> Cont<'a,'r>
+  val run: Cont<'a,'r> -> ('a -> 'r) -> 'r
+  val callCC: (('a -> Cont<'b,'r>) -> Cont<'a,'r>) -> Cont<'a,'r>
 
 type ContBuilder =
-     new: unit -> ContBuilder
-     member Bind: Cont<'a,'r> * ('a -> Cont<'b,'r>) -> Cont<'b,'r>
-     member Zero: unit -> Cont<unit,'r>
-     member Return: 'a -> Cont<'a,'r>
-     member ReturnFrom: Cont<'a,'r> -> Cont<'a,'r>
+  new: unit -> ContBuilder
+  member Bind: Cont<'a,'r> * ('a -> Cont<'b,'r>) -> Cont<'b,'r>
+  member Zero: unit -> Cont<unit,'r>
+  member Return: 'a -> Cont<'a,'r>
+  member ReturnFrom: Cont<'a,'r> -> Cont<'a,'r>
 {% endhighlight %}
 
 Реализация:
@@ -34,22 +34,22 @@ type ContBuilder =
 namespace FSharp.Monads
 
 type Cont<'a, 'result> =
-     Cont of (('a -> 'result) -> 'result)
+  Cont of (('a -> 'result) -> 'result)
 
 [<RequireQualifiedAccess>]
 module Cont =
-     let run (Cont c) k = c k
-     let callCC f =
-         Cont(fun c -> let g a = Cont(fun _ -> c a)
-                       let (Cont m) = f g in m c)
+  let run (Cont c) k = c k
+  let callCC f =
+    Cont(fun c -> let g a = Cont(fun _ -> c a)
+                  let (Cont m) = f g in m c)
 
 type ContBuilder() =
-     member b.Bind(Cont m, f) =
-         Cont(fun k ->
-            m (fun r -> let (Cont c) = f r in c k))
-     member b.Zero() = Cont(fun k -> k ())
-     member b.Return x = Cont(fun k -> k x)
-     member b.ReturnFrom x = x : Cont<_,_>
+  member b.Bind(Cont m, f) =
+    Cont(fun k ->
+      m (fun r -> let (Cont c) = f r in c k))
+  member b.Zero() = Cont(fun k -> k ())
+  member b.Return x = Cont(fun k -> k x)
+  member b.ReturnFrom x = x : Cont<_,_>
 {% endhighlight %}
 
 В качестве примера использования перепишем на F# [хрестоматийный пример](http://hackage.haskell.org/packages/archive/mtl/2.0.0.0/doc/html/Control-Monad-Cont.html) использования монады `cont` вместе с функцией `callCC`. Функция осуществляет проверку строки с именем пользователя и осуществляет немедленный выход в случае указания пустого имени - с помощью вызова функции `exit` внутри `Cont<_,_>`-вычисления, переданного в `callCC`:
@@ -61,18 +61,18 @@ let cont = ContBuilder()
 
 /// Проверка строки имени на пустоту
 let validateName name exit =
-    cont { if System.String.IsNullOrEmpty name then
-              return! exit "Вы забыли указать своё имя!" }
+  cont { if System.String.IsNullOrEmpty name then
+           return! exit "Вы забыли указать своё имя!" }
 
 /// Проверка имени пользователя
 let whatsYourName name =
-    Cont.run (cont {
-       let! responce =
-          Cont.callCC <| fun exit -> cont {
-             do! validateName name exit
-             return sprintf "Добро пожаловать, %s!" name }
-       return responce
-    }) (printfn "%s")
+  Cont.run (cont {
+    let! responce =
+      Cont.callCC <| fun exit -> cont {
+        do! validateName name exit
+        return sprintf "Добро пожаловать, %s!" name }
+    return responce
+  }) (printfn "%s")
 
 whatsYourName ""
 whatsYourName "Alex"
@@ -83,8 +83,8 @@ whatsYourName "Alex"
 {% highlight fsharp %}
 /// Проверка строки имени на пустоту
 let validateName' name exit =
-    if System.String.IsNullOrEmpty name then
-         cont.ReturnFrom(exit "Вы забыли указать своё имя!")
+  if System.String.IsNullOrEmpty name
+    then cont.ReturnFrom(exit "Вы забыли указать своё имя!")
     else cont.Zero()
 {% endhighlight %}
 
@@ -93,15 +93,14 @@ let validateName' name exit =
 {% highlight fsharp %}
 /// Проверка имени пользователя
 let whatsYourName' name =
-    Cont.run
-       (cont.Bind(
-          Cont.callCC (fun exit ->
-             cont.Bind(
-                validateName' name exit,
-                fun _ -> cont.Return <|
-                          sprintf "Добро пожаловать, %s!" name)),
-          fun responce -> cont.Return responce))
-       (printfn "%s")
+  Cont.run
+    (cont.Bind(
+      Cont.callCC (fun exit ->
+        cont.Bind(
+          validateName' name exit,
+          fun _ -> cont.Return (sprintf "Добро пожаловать, %s!" name))),
+      fun responce -> cont.Return responce))
+    (printfn "%s")
 {% endhighlight %}
 
 Если вы не разбирались с `callCC`, то очень советую взять этот код и аккуратно заинлайнить/применить все вызовы, это не сложно, увлекательно и позволит понять как именно осуществляется контроль потока управления с помощью оператора `callCC`.
