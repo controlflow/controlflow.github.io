@@ -157,6 +157,7 @@
 
 .page-heading {
     font-size: 20px;
+    font-weight: 300;
 }
 
 .post-list {
@@ -164,8 +165,20 @@
     list-style: none;
 
     > li {
-        margin-bottom: $spacing-unit;
+        //margin-bottom: $spacing-unit;
     }
+
+    h2 {
+        font-size: 20px;
+        font-family: Verdana, Geneva, sans-serif;
+        font-weight: 300;
+        letter-spacing: -1px;
+        line-height: 1;
+    }
+}
+
+ul.post-list {
+    text-indent: 0;
 }
 
 .post-meta {
@@ -175,7 +188,7 @@
 
 .post-link {
     display: block;
-    font-size: 24px;
+    font-size: 20px;
 }
 
 .post-header {
