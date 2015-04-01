@@ -11,7 +11,7 @@ tags: fsharp measure stopwatch printf sprintf threadpriority gc
 let timer = System.Diagnostics.Stopwatch.StartNew()
 
 for i = 0 to 100500 do
-    someTask()
+  someTask()
 
 timer.Stop()
 printfn "elapsed=%O" timer.Elapsed
