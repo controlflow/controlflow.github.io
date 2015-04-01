@@ -10,12 +10,10 @@ tags: csharp expressions linq INotifyPropertyChanged mvvm
 Проблема лишь в том, как формируются эти деревья во время выполнения. Например, такой код:
 
 ```c#
-class Foo
-{
+class Foo {
   public int Value { get; set; }
 
-  public Expression<Func<Foo, int>> Bar()
-  {
+  public Expression<Func<Foo, int>> Bar() {
     return x => x.Value;
   }
 }
@@ -24,19 +22,16 @@ class Foo
 Разворачивается компилятором C# вот в такой (это не валидный код на C#, так как компилятор на уровне IL-кода использует специальные инструкции, позволяющие быстро получить `MethodInfo` по токену метода `get_Value()` , который является `get`-акцессором свойства `Value`. Примерно такой же код мог бы генерировать C#, если бы поддерживал аналоги `typeof()` для методов/свойств/полей):
 
 ```c#
-class Foo
-{
+class Foo {
   public int Value { get; set; }
 
-  public Expression<Func<Foo, int>> Bar()
-  {
+  public Expression<Func<Foo, int>> Bar() {
     var parameterExpression = Expression.Parameter(typeof(Foo), "x");
     return Expression.Lambda<Func<Foo, int>>(
-      body:
-        Expression.Property(
-          expression: parameterExpression,
-          propertyAccessor: (MethodInfo)
-            MethodBase.GetMethodFromHandle(ldtoken(get_Value()))),
+      body: Expression.Property(
+        expression: parameterExpression,
+        propertyAccessor: (MethodInfo)
+          MethodBase.GetMethodFromHandle(ldtoken(get_Value()))),
       parameters:
         new ParameterExpression[] { parameterExpression });
   }
@@ -56,10 +51,8 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 
-public static class Property
-{
-  public static PropertyInfo Of<T, TProperty>(
-    Expression<Func<T, TProperty>> propertyExpression)
+public static class Property {
+  public static PropertyInfo Of<T, TProperty>(Expression<Func<T, TProperty>> propertyExpression)
   {
     if (propertyExpression == null)
       throw new ArgumentNullException("propertyExpression");
@@ -87,9 +80,7 @@ using System.Reflection;
 
 public static class Property
 {
-  public static PropertyInfo FromExpressionCached<T>(
-    // вывода типов C# уже не хватает, поэтому используем object
-    Func<Expression<Func<T, object>>> propertyExpression)
+  public static PropertyInfo FromExpressionCached<T>(Func<Expression<Func<T, object>>> propertyExpression)
   {
     // если переданный делегат в замыкании хранит наш кэш
     var data = propertyExpression.Target as CachedData;
@@ -98,8 +89,7 @@ public static class Property
     return FromImpl(propertyExpression); // иначе вычисляем PropertyInfo
   }
 
-  private static PropertyInfo FromImpl<T>(
-    Func<Expression<Func<T, object>>> propertyExpression)
+  private static PropertyInfo FromImpl<T>(Func<Expression<Func<T, object>>> propertyExpression)
   {
     // если у делегата нет замыкания,
     // то и у вложенного в него дерева выражения не должно быть
@@ -111,9 +101,7 @@ public static class Property
     var body = propertyExpression().Body; // вызываем таки делегат
 
     // из-за object у нас может быть тут лишний боксинг
-    if (body.NodeType == ExpressionType.Convert &&
-        body.Type     == typeof(object))
-    {
+    if (body.NodeType == ExpressionType.Convert && body.Type == typeof(object)) {
       body = ((UnaryExpression) body).Operand;
     }
 
@@ -129,12 +117,9 @@ public static class Property
     // раз делегат у нас статический, то он должен быть закэширован
     // компилятором в статическом поле типа, в котором он определён
     var declaringType = propertyExpression.Method.DeclaringType;
-    foreach (var fieldInfo in declaringType
-      .GetFields(BindingFlags.Static | BindingFlags.NonPublic))
-    {
+    foreach (var fieldInfo in declaringType.GetFields(BindingFlags.Static | BindingFlags.NonPublic)) {
       // проходимся по всем статическим полям в поисках делегата
-      if (ReferenceEquals(fieldInfo.GetValue(null), propertyExpression))
-      {
+      if (ReferenceEquals(fieldInfo.GetValue(null), propertyExpression)) {
         // нашёлся - создаём специальный holder для PropertyInfo
         var cached = new CachedData { CachedValue = propInfo };
         // заменяем делегат в поле на делегат на stub-метод
@@ -148,16 +133,14 @@ public static class Property
   }
 
   // аналог closure-класса, хранящий закэшированное значение
-  private sealed class CachedData
-  {
+  private sealed class CachedData {
     public PropertyInfo CachedValue { get; set; }
 
-    public Expression<Func<T, object>> Stub<T>()
-    {
+    public Expression<Func<T, object>> Stub<T>() {
       throw new InvalidOperationException("Should never be called");
     }
   }
-}<br/>
+}
 ```
 
 То есть мы вызываем переданный делегат единожды и сохраняем вычисленное значение `PropertyInfo` прямо в поле кэшированного экземпляра делегата! А это значит, что при следующем вызове из клиентского кода нам передадут не исходный делегат, а нашу заглушку, из замыкания которой очень легко достать закэшированное значение (всего один type test)! Не смотря на массивность кода и рефлексию, работает эта штука по сравнению с Expression Trees просто реактивно:
@@ -167,16 +150,13 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 
-static class Program
-{
-  static void Main()
-  {
+static class Program {
+  static void Main() {
     Thread.CurrentThread.Priority = ThreadPriority.Highest;
     const int count = 100000;
 
     var sw = Stopwatch.StartNew();
-    for (var i = 0; i < count; i++)
-    {
+    for (var i = 0; i < count; i++) {
       var p = Property.FromExpression((Stopwatch _) => _.Elapsed);
       GC.KeepAlive(p);
     }
@@ -185,8 +165,7 @@ static class Program
     sw.Reset();
     sw.Start();
 
-    for (var i = 0; i < count; i++)
-    {
+    for (var i = 0; i < count; i++) {
       var p = Property.FromExpressionCached<Stopwatch>(() => _ => _.Elapsed);
       GC.KeepAlive(p);
     }
@@ -202,4 +181,5 @@ static class Program
 expr: 00:00:01.0867601
 hack: 00:00:00.0014079
 ```
+
 p.s. Ради бога, не используйте это решение в production. Весь этот способ - завязка на implementation details компилятора (кэширование делегатов), мутирование чужих статических переменных и прочее безобразие, непонятно как работающее в многопоточной среде. Код приведён исключительно в образовательных целях и лишь показывает, что кэширование Expression Trees имело бы место в C#.

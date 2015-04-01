@@ -1,9 +1,11 @@
 ---
 layout: post
-title: "NAME PLZ"
+title: "Скорость копирования структур"
 date: 2011-11-19 02:16:00
 categories: 12984834753
 ---
+![]({{ site.baseurl }}/images/struct-copy-perf.png)
+
 График зависимости между размером типов-значений и скорости их копирования, например, при передаче в качестве параметров методов или сохранении в массиве типов-значений. Некоторые выводы:
 
 * Выравнивание очень важно и *значительно* влияет на производительность копирования. Не смотря на шум в результатах, прекрасно видно, что automatic layout всегда даёт лучший результат. Не выровненные структуры небольших размеров просто адски тормозят по сравнению со своими выровненными аналогами.
@@ -22,14 +24,13 @@ using System.Threading;
 
 static class Program
 {
-  static void Main()
-  {
+  static void Main() {
     Thread.CurrentThread.Priority = ThreadPriority.Highest;
 
     var name = new AssemblyName("FooAssembly");
     var module = AppDomain.CurrentDomain
-        .DefineDynamicAssembly(name, AssemblyBuilderAccess.Run)
-        .DefineDynamicModule("FooModule");
+      .DefineDynamicAssembly(name, AssemblyBuilderAccess.Run)
+      .DefineDynamicModule("FooModule");
 
     for (var structSize = 0; structSize < 1000; structSize++) {
       Console.Write("{0};", structSize);
@@ -60,19 +61,16 @@ static class Program
     }
   }
 
-  private static readonly TypeAttributes[] Layouts = new[]
-  {
+  private static readonly TypeAttributes[] Layouts = {
     TypeAttributes.SequentialLayout,
     TypeAttributes.AutoLayout
   };
 }
 
-static class TestClass<T> where T : struct
-{
+static class TestClass<T> where T : struct {
   private const int COUNT = 10000000;
 
-  public static void DoTest()
-  {
+  public static void DoTest() {
     var array = new T[1000];
     for (var i = 0; i < COUNT; i++) {
       var temp1 = new T();

@@ -7,4 +7,4 @@ tags: javascript
 ---
 Просто положу это здесь, интересно:
 
-![](http://media.tumblr.com/tumblr_lwtb3avNOq1qdrm28.png)
+![]({{ site.baseurl }}/images/js-object-layout.png)

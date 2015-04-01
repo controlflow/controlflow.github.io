@@ -5,7 +5,7 @@ date: 2012-01-08 20:52:00
 categories: 15516776088
 tags: csharp wp7 .net behavior
 ---
-По мере ~~ужасания~~ковыряния API виндофончиков, рождаются ~~вело~~кусочки кода, претендующие на переиспользование. Начнём с behavior’а, который помогает скрывать те или иные элементу управления в альбомной ориентации WP7-девайса, так как большие отступы, всякие названия приложений и прочие элементы metro-дизайна просто нещадно кушают место на экране.
+По мере ~~ужасания~~ ковыряния API виндофончиков, рождаются ~~вело~~кусочки кода, претендующие на переиспользование. Начнём с behavior’а, который помогает скрывать те или иные элементу управления в альбомной ориентации WP7-девайса, так как большие отступы, всякие названия приложений и прочие элементы metro-дизайна просто нещадно кушают место на экране.
 
 Начнём с базового класса:
 
@@ -46,8 +46,7 @@ public abstract class PhoneOrientationBehavior<T> : Behavior<T>
     AssociatedObject.Loaded -= ElementLoaded;
   }
 
-  private void OrientationChanged(
-    object sender, OrientationChangedEventArgs e)
+  private void OrientationChanged(object sender, OrientationChangedEventArgs e)
   {
     ApplyOrientation(e.Orientation);
   }
@@ -95,7 +94,8 @@ public sealed class PortraitOrientationVisibilityBehavior
     if (Invert) isPortrait = !isPortrait;
 
     AssociatedObject.Visibility = isPortrait
-      ? Visibility.Visible : Visibility.Collapsed;
+      ? Visibility.Visible
+      : Visibility.Collapsed;
   }
 }
 ```

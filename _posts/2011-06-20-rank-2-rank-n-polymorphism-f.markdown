@@ -46,12 +46,12 @@ type PolyFunc = abstract Invoke : 'a -> unit
 
 /// printRecord : Record -> PolyFunc -> unit
 let printRecord r (printer: PolyFunc) =
-    printer.Invoke r.id
-    printer.Invoke r.name
+  printer.Invoke r.id
+  printer.Invoke r.name
 
 printRecord
-    { id = 123; name = "Alex" }
-    { new PolyFunc with member __.Invoke x = printAny x }
+  { id = 123; name = "Alex" }
+  { new PolyFunc with member __.Invoke x = printAny x }
 ```
 
 Абстрактный тип `PolyFunc` определяет generic-метод `Invoke` с нужной нам сигнатурой, функция `printRecord` теперь может быть корректно типизирована, а по месту вызова в качестве полиморфной функции мы передаём экземпляр наследника типа `PolyFunc` (который тут же определяем с помощью *F# object expression*), в переопределении метода `Invoke` которого мы вызываем метод `printAny`, передавая свой тип-параметр (явно это показано в коде ниже).

@@ -7,4 +7,4 @@ tags: values types kinds sorts
 ---
 Просто положу это сюда.
 
-![](http://media.tumblr.com/tumblr_lt0c52el1N1qdrm28.png)
+![]({{ site.baseurl }}/images/values-types-kinds-sorts.png)

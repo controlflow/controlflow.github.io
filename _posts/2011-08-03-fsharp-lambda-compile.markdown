@@ -10,11 +10,9 @@ tags: fsharp lambda-expressions closure compiler fprog
 Теперь настало время заглянуть во внутреннюю кухню F#, поддерживающего значения функционального типа (а так же делегаты CLI), как и любой другой нормальный функциональный язык. Значения функционального типа в F# представляются для CLI наследниками следующего типа:
 
 ```c#
-namespace Microsoft.FSharp.Core
-{
+namespace Microsoft.FSharp.Core {
   [Serializable]
-  public abstract class FSharpFunc<T, TResult>
-  {
+  public abstract class FSharpFunc<T, TResult> {
     public abstract override TResult Invoke(T func);
   }
 }
@@ -26,10 +24,8 @@ namespace Microsoft.FSharp.Core
 
 ```c#
 [Serializable]
-class foo@7 : FSharpFunc<Tuple<int, int>, int>
-{
-  public override int Invoke(Tuple<int, int> tuple)
-  {
+class foo@7 : FSharpFunc<Tuple<int, int>, int> {
+  public override int Invoke(Tuple<int, int> tuple) {
     int x = tuple.Item1;
     int y = tuple.Item2;
     return x + y;
@@ -41,21 +37,20 @@ class foo@7 : FSharpFunc<Tuple<int, int>, int>
 
 ```c#
 [Serializable]
-class bar@5 : FSharpFunc<int, FSharpFunc<int, int>>
-{
-  public override FSharpFunc<int, int> Invoke(int arg)
-  {
+class bar@5 : FSharpFunc<int, FSharpFunc<int, int>> {
+  public override FSharpFunc<int, int> Invoke(int arg) {
     return new bar@6(arg);
   }
 }
 
 [Serializable]
-class bar@6 : FSharpFunc<int, int>
-{
+class bar@6 : FSharpFunc<int, int> {
   internal int x;
   internal bar@6(int x) { this.x = x; }
 
-  public override int Invoke(int y) { return this.x + y; }
+  public override int Invoke(int y) {
+    return this.x + y;
+  }
 }
 ```
 
@@ -63,9 +58,10 @@ class bar@6 : FSharpFunc<int, int>
 
 ```c#
 [Serializable]
-class hh@7 : OptimizedClosures.FSharpFunc<int, int, int>
-{
-  public override int Invoke(int x, int y) { return x + y; }
+class hh@7 : OptimizedClosures.FSharpFunc<int, int, int> {
+  public override int Invoke(int x, int y) {
+    return x + y;
+  }
 }
 ```
 
@@ -74,14 +70,13 @@ class hh@7 : OptimizedClosures.FSharpFunc<int, int, int>
 ```c#
 [Serializable]
 public abstract class FSharpFunc<T1, T2, TResult>
-    : FSharpFunc<T1, FSharpFunc<T2, TResult>> // <---
+  : FSharpFunc<T1, FSharpFunc<T2, TResult>> // <---
 {
   // аналог Invoke с двумя аргументами
   public abstract override TResult Invoke(T1 arg1, T2 arg2);
 
   // переопределение FSharpFunc<T1, FSharpFunc<T2, TResult>>.Invoke()
-  public override FSharpFunc<T2, TResult> Invoke(T1 arg)
-  {
+  public override FSharpFunc<T2, TResult> Invoke(T1 arg) {
     // возвращаем FSharpFunc<T2, TResult>, передавая в замыкание this и arg
     return new Invoke@2920<T2, TResult, T1>(this, arg);
   }
@@ -93,14 +88,12 @@ public abstract class FSharpFunc<T1, T2, TResult>
     public FSharpFunc<T1, T2, TResult> f;
     public T1 t;
 
-    internal Invoke@2920(FSharpFunc<T1, T2, TResult> f, T1 t)
-    {
+    internal Invoke@2920(FSharpFunc<T1, T2, TResult> f, T1 t) {
       this.f = f;
       this.t = t;
     }
 
-    public override TResult Invoke(T2 arg)
-    {
+    public override TResult Invoke(T2 arg) {
       // теперь у нас есть оба аргумента, вызываем Invoke(T1, T2)
       return this.f.Invoke(this.t, arg);
     }
@@ -111,7 +104,7 @@ public abstract class FSharpFunc<T1, T2, TResult>
 То есть на самом деле всё равно создаётся `FSharpFunc<T1, FSharpFunc<T2, TResult»`, вызвав у которого `Invoke()` с первым аргументом, нам вернётся другая функция, применив к которой второй аргумент, мы получим результат. Так в чём же выигрыш, ведь опять требуется выделять память под замыкание для первого аргумента? Трюк в том, что значение функционального типа с аргументами в каррированной форме не вызываются как `f.Invoke(arg1).Invoke(arg2)`, для подобных вызовов в стандартной библиотеке определено несколько перегрузок статического метода `InvokeFast` (реальная реалзиация немного отличается от приведённой ниже названием типов аргументов):
 
 ```c#
-public static TResult InvokeFast<T1, T2, TResukt>(
+public static TResult InvokeFast<T1, T2, TResult>(
   FSharpFunc<T1, FSharpFunc<T2, TResult>> func, T1 x, T2 y)
 {
   var func2arg = func as OptimizedClosures.FSharpFunc<T1, T2, TResult>;
@@ -121,14 +114,12 @@ public static TResult InvokeFast<T1, T2, TResukt>(
 }
 
 public static TResult InvokeFast<T1, T2, T3, TResult>(
-  FSharpFunc<T1, FSharpFunc<T2, FSharpFunc<T3, TResult>>> func,
-  T1 x, T2 y, T3 z)
+  FSharpFunc<T1, FSharpFunc<T2, FSharpFunc<T3, TResult>>> func, T1 x, T2 y, T3 z)
 {
   var func3arg = func as OptimizedClosures.FSharpFunc<T1, T2, T3, TResult>;
   if (func3arg != null) return func3arg.Invoke(x, y, z);
 
-  var func2arg = func as
-      OptimizedClosures.FSharpFunc<T1, T2, FSharpFunc<T3, TResult>>;
+  var func2arg = func as OptimizedClosures.FSharpFunc<T1, T2, FSharpFunc<T3, TResult>>;
   if (func2arg != null) return func2arg.Invoke(x, y).Invoke(z);
 
   return InvokeFast<W>(func.Invoke(x), y, z);
@@ -152,10 +143,8 @@ let f = (fun() -> Console.WriteLine("привет!"))
 
 ```c#
 [Serializable]
-class f@3 : FSharpFunc<Unit, Unit>
-{
-  public override Unit Invoke(Unit unitVar0) // <---
-  {
+class f@3 : FSharpFunc<Unit, Unit> {
+  public override Unit Invoke(Unit unitVar0) { // <---
     Console.WriteLine("привет!");
     return null; // null - и есть значение ()
   }
@@ -172,10 +161,8 @@ let a = Action(fun() -> Console.WriteLine("привет!"))
 
 ```c#
 [Serializable]
-sealed class a@4 // <--- не наследник FSharpFunc!
-{
-  internal void Invoke() // произвольная сигнатура
-  {
+sealed class a@4 { // <--- не наследник FSharpFunc!
+  internal void Invoke() { // произвольная сигнатура
     Console.WriteLine("привет!");
   }
 }
@@ -183,19 +170,19 @@ sealed class a@4 // <--- не наследник FSharpFunc!
 
 Окей, с этим разобрались, какие же ещё отличия есть в компиляции анонимных делегатов C# и значений функционального типа в F#? Внимательный читатель мог обратить внимание на то, что F# в наследниках `FSharpFunc` генерирует конструкторы, копирующие данные замыкания в поля класса. Зачем компилировать “лишние” конструкторы, если можно из метода, создающего closure-класс, заполнять `public`-поля closure-класса (в F# поля closure-классов иногда почему-то имеют модификатор `internal`), как это делает C#? Я не отвечу на вопрос “почему так сделано”, скорее всего поля оставили `public`/`internal` просто так (или это вообще баг ~~p3ynO1~~), ведь поля можно сделать `private` и абсолютно любой F# код продолжет исправно работать! Как же так, ведь C# использует для полей `public` чтобы метод, создающий анонимный делегат, мог обращаться к переменным, взятым в замыкание, считывать и изменять их?
 
-Тут открывается ещё одно важное отличие компиляции замыканий в F# и C# - переменные, взятые в замыкание в F# не могут быть изменяемыми. Многие, кто пробовали работать с F#, наверняка сталкивались с таким ограничением (очень правильным ограничением), выражаемым в ошибку компиляции `FS0407`. Это ограничение имеет большое влияние на код, генерируемый для представления замыкания - можно создавать экземпляр closure-класса и просто передавать в него “снимок” значений локальных переменных замыкания (в F# - через конструктор closure-класса), продолжая далее использовать эти локальные переменные, так как они не могут измениться и в точности равны значениям, заключённым в созданном closure-классе. Это позволяет не выделять взятые в замыкания переменные на куче (и обращаться к ним, как к полям closure-класса), а лишь копировать их значения в местах создания closure-класса. В очень редких случаях, когда “замыкаемость” на изменяемые переменные всё же необходима или удобна, F# предоставляет удобную обёртку изменяемх значений - `ref`-ячейки.
+Тут открывается ещё одно важное отличие компиляции замыканий в F# и C# - переменные, взятые в замыкание в F# не могут быть изменяемыми. Многие, кто пробовали работать с F#, наверняка сталкивались с таким ограничением (очень правильным ограничением), выражаемым в ошибку компиляции `FS0407`. Это ограничение имеет большое влияние на код, генерируемый для представления замыкания - можно создавать экземпляр closure-класса и просто передавать в него “снимок” значений локальных переменных замыкания (в F# - через конструктор closure-класса), продолжая далее использовать эти локальные переменные, так как они не могут измениться и в точности равны значениям, заключённым в созданном closure-классе. Это позволяет не выделять взятые в замыкания переменные на куче (и обращаться к ним, как к полям closure-класса), а лишь копировать их значения в местах создания closure-класса. В очень редких случаях, когда “замыкаемость” на изменяемые переменные всё же необходима или удобна, F# предоставляет удобную обёртку изменяемых значений - `ref`-ячейки.
 
 Таким образом в F# абсолютно нет проблем с замыканием на одни данные из двух значений функционального типа (или делегатов), давайте перепишем проблемный в C# пример на F#:
 
 ```fsharp
 let sharedClosure() =
-    let xs = Array.zeroCreate 1000000
-    let index = ref 0 // ячейка с изменяемым значением
+  let xs = Array.zeroCreate 1000000
+  let index = ref 0 // ячейка с изменяемым значением
 
-    let notEventUsed = Action(fun() ->
-        Console.WriteLine(xs.[!index] : int))
+  let notEventUsed = Action(fun() ->
+    Console.WriteLine(xs.[!index] : int))
 
-    fun() -> index := !index + 1
+  fun() -> index := !index + 1
 ```
 
 И посмотрим на то, что внутри:
@@ -206,33 +193,31 @@ sealed class notEventUsed@21 // не наследник FSharpFunc
   public int[] xs;
   public FSharpRef<int> index;
 
-  public notEventUsed@21(int[] xs, FSharpRef<int> index)
-  {
+  public notEventUsed@21(int[] xs, FSharpRef<int> index) {
     this.xs = xs;
     this.index = index;
   }
 
-  internal void Invoke()
-  {
+  internal void Invoke() {
   	Console.WriteLine(this.xs[this.index.Contents]);
   }
 }
 
 [Serializable]
-class sharedClosure@24 : FSharpFunc<Unit, Unit>
-{
+class sharedClosure@24 : FSharpFunc<Unit, Unit> {
   public FSharpRef<int> index;
-  internal sharedClosure@24(FSharpRef<int> index) { this.index = index; }
 
-  public override Unit Invoke(Unit unitVar0)
-  {
+  internal sharedClosure@24(FSharpRef<int> index) {
+    this.index = index;
+  }
+
+  public override Unit Invoke(Unit unitVar0) {
     this.index.Contents = this.index.Contents + 1;
     return null;
   }
 }
 
-public static FSharpFunc<Unit, Unit> sharedClosure()
-{
+public static FSharpFunc<Unit, Unit> sharedClosure() {
   int[] xs = ArrayModule.ZeroCreate<int>(1000000);
   FSharpRef<int> index = Operators.Ref<int>(0);
   Action notEventUsed = new Action(new notEventUsed@21(xs, index).Invoke);
@@ -252,10 +237,9 @@ public static FSharpFunc<Unit, Unit> sharedClosure()
 open System
 
 let showFromOtherDomain (message: string) =
-    let domain = AppDomain.CreateDomain "Temp"
-    try domain.DoCallBack(fun() ->
-            Console.WriteLine message)
-    finally AppDomain.Unload domain
+  let domain = AppDomain.CreateDomain "Temp"
+  try domain.DoCallBack(fun() -> Console.WriteLine message)
+  finally AppDomain.Unload domain
 ```
 
 Аналогичный код на C# просто упадёт из-за невозможности сериализовать closure-класс, а код на F# выполнится как ожидается. К сожалению, компилятор F# иногда не отмечает closure-классы как сериализуемые и найти этому разумное объяснение я не смог, но нашёл один конкретный случай - когда в замыкание попадает значение типа массива .NET (в этом посте рассмотрен такой случай и аннотации атрибутом `[Serializable]` действительно нет). Если у Вас есть информация на этот счёт, то буду рад, если вы поделитесь комментарием.

@@ -15,40 +15,30 @@ public static class TextOptionsWPF4 {
     try {
       // PresentationFramework.dll
       var assembly = typeof(System.Windows.Application).Assembly;
-      var textOptionsType = assembly.GetType(
-      	"System.Windows.Media.TextOptions");
+      var textOptionsType = assembly.GetType("System.Windows.Media.TextOptions");
       if (textOptionsType == null) return;
 
       var property = textOptionsType.GetField(
-        "TextFormattingModeProperty",
-        BindingFlags.Public | BindingFlags.Static);
+        "TextFormattingModeProperty", BindingFlags.Public | BindingFlags.Static);
       if (property == null) return;
 
-      TextFormattingModeProperty =
-        property.GetValue(null) as DependencyProperty;
+      TextFormattingModeProperty = property.GetValue(null) as DependencyProperty;
     }
     catch (Exception) { }
     finally {
       TextFormattingModeProperty = TextFormattingModeProperty ??
         DependencyProperty.RegisterAttached(
-          "TextFormattingMode",
-          typeof(TextFormattingModeWPF4),
-          typeof(TextOptionsWPF4),
+          "TextFormattingMode", typeof(TextFormattingModeWPF4), typeof(TextOptionsWPF4),
           new PropertyMetadata(TextFormattingModeWPF4.Ideal));
     }
   }
 
-  public static TextFormattingModeWPF4
-    GetTextFormattingMode(UIElement element) {
-    return (TextFormattingModeWPF4)
-      element.GetValue(TextFormattingModeProperty);
+  public static TextFormattingModeWPF4 GetTextFormattingMode(UIElement element) {
+    return (TextFormattingModeWPF4) element.GetValue(TextFormattingModeProperty);
   }
 
-  public static void SetTextFormattingMode(
-    UIElement element, TextFormattingModeWPF4 value)
-  {
-    var val = Enum.ToObject(
-      TextFormattingModeProperty.PropertyType, (int)value);
+  public static void SetTextFormattingMode(UIElement element, TextFormattingModeWPF4 value) {
+    var val = Enum.ToObject(TextFormattingModeProperty.PropertyType, (int)value);
     element.SetValue(TextFormattingModeProperty, val);
   }
 }
