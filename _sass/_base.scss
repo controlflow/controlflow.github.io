@@ -84,7 +84,7 @@ p {
     text-align: justify;
 }
 
-p + p, ul + p, pre + p, h3 + p, h4 + p {
+p + p, ul + p, pre + p, h3 + p, h4 + p, blockquote + p {
     text-indent: 1.5em;
 }
 
@@ -143,6 +143,7 @@ code {
 
 code {
     padding: 1px 2px;
+    white-space: pre;
 }
 
 pre {
