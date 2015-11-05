@@ -7,6 +7,46 @@ tags: csharp properties design
 
 ## C# 4.0 и 5.0 - спасибо и на этом
 
+Последовавшие за 3.0 релизы языка всегда были посвещаны какому-то относительно большому направлению работ (`dynamic` и `async`) и не вносили качественных изменений в дизайн свойств.
+
+### Свойства-мутанты из COM'а
+
+Из-за того, что в никак не умеревшем COM'е существуют свойства с формальными параметрами, а C# при потреблении метаданных игнорирует подобные "индексированные" свойства, то код:
+
+```c#
+void M(COMSpreadsheet spreadsheet) {
+  spreadsheet.get_Range("A1").Value = 42;
+  spreadsheet.set_Width("B1", comSpreadsheet.get_Width("B1") + 1);
+}
+```
+
+```c#
+void M(COMSpreadsheet spreadsheet) {
+  spreadsheet.Range["A1"].Value = 42;
+  spreadsheet.Width["B1"] += 1;
+}
+```
+
+
+### Асинхронные свойства? Нет, спасибо
+
+В версии языка 2.0, в C# были введены методы-итераторы, но не все знают что `yield return`/`yield break` работают еще и в `get`-акцессорах свойств:
+
+```c#
+class C {
+  public IEnumerable<int> ImportantValues {
+    get {
+      yield return -1;
+      yield return 0;
+      yield return 42;
+    }
+  }
+}
+```
+
+
+
+## C# 6.0 - одумаемся
 
 
 
@@ -18,7 +58,6 @@ C# 5.0 - нет async-свойств
 
 C# 6.0 - expression-тела, инициализаторы, get-only автосвойства
 
-* свойства не могут быть generic, из-за этого в F# придумали type functions
 * не кинуть исключение в => теле
 * не повесить атрибут на геттер
 * сильно отличающийся expression-синтаксис, слишком похоже на филды
