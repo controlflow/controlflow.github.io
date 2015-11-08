@@ -22,12 +22,20 @@ ul, ol, dl, figure,
     margin-bottom: $spacing-unit / 2;
 }
 
+h3, h4 {
+    margin-top: $spacing-unit;
+}
+
 img {
     max-width: 100%;
     vertical-align: middle;
     display: block;
     margin-left: auto;
     margin-right: auto;
+}
+
+sup {
+    font-size: x-small;
 }
 
 figure > img {
@@ -52,6 +60,7 @@ li {
     > ol {
          margin-bottom: 0;
     }
+    margin-bottom: 15px;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -76,9 +85,9 @@ p {
     text-align: justify;
 }
 
-p + p { text-indent: 1.5em; }
-ul + p { text-indent: 1.5em; }
-pre + p { text-indent: 1.5em; }
+p + p, ul + p, pre + p, h2 + p, h2 + h3, h3 + p, h4 + p, blockquote + p {
+    text-indent: 1.5em;
+}
 
 div.highlight {
     background-color: $background-color;
@@ -135,6 +144,7 @@ code {
 
 code {
     padding: 1px 2px;
+    white-space: pre;
 }
 
 pre {
