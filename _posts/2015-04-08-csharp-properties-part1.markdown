@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Наследие прошлого или property hell (часть 1)"
+title: "Дизайн и эволюция свойств в C# (часть 1)"
 date: 2015-04-08 17:52:00
 tags: csharp properties design
 ---
