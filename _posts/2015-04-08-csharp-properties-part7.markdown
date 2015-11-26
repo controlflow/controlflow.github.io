@@ -56,5 +56,27 @@ class Person {
 
 * фичи IDE должны проверять и поля, и свойства
 * [DebuggerDisplay] - приходится скрывать поля
-* порядок акцессоров произволен (добавить в C# 1.0)
+* порядок аксессоров произволен (добавить в C# 1.0)
 * нельзя сделать делегат из свойства (добавить в C# 1.0)
+
+```c#
+delegate string ReturnsString();
+
+void M(Person person) {
+  ReturnsString delegate1 = Console.RealLine;
+  ReturnsString delegate2 = person.Name; // ???
+}
+```
+
+```fsharp
+type Person = { firstName: string
+                lastName: string }
+
+type Person with
+  member this.fullName with get() = this.firstName + " " + this.lastName
+  
+let p = { firstName = "Alan"; lastName = "Turing" }
+printfn "%s" p.fullName
+```
+
+
