@@ -226,10 +226,10 @@ class Person {
 * TODO: обилие скобок
 * TODO: statement-тела
 
-Продолжение следует...
 
 
 
+[Продолжение следует...]({% post_url 2015-04-08-csharp-properties-part3 %})
 
 
 
