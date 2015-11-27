@@ -3,6 +3,7 @@ layout: post
 title: "Делегат из extension method group"
 date: 2012-02-10 19:04:00
 categories: 17374234714
+author: Шведов Александр
 tags: csharp delegate
 ---
 Интересно, я ожидал от компилятора C# в таком коде скрытого замыкания:

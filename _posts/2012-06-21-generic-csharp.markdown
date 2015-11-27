@@ -3,6 +3,7 @@ layout: post
 title: "Привет из 2001 года: Generic C# specification"
 date: 2012-06-21 11:12:00
 categories: 25564834026
+author: Шведов Александр
 tags: csharp fsharp generics types typesystems clr
 ---
 Совсем недавно товарищ Don Syme [выложил в своём блоге](http://blogs.msdn.com/b/dsyme/archive/2012/06/19/clr-c-generics-history-the-generic-csharp-draft-from-the-msr-cambridge-team.aspx) привет из далёкого прошлого Microsoft Research - драфт спецификации research-языка GC# (*Generic C#*) от 12 декабря 2001 года. Не сложно догадаться, что этот язык был дополнением к уже существующему тогда языку C# 1.0, добавляющим в поддержку параметрического полиморфизма.

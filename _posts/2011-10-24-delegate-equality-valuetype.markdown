@@ -3,6 +3,7 @@ layout: post
 title: "Delegate equality и методы типов-значений"
 date: 2011-10-24 16:12:54
 categories: 11862999880
+author: Шведов Александр
 tags: csharp clr .net delegate valuetype
 ---
 Видели [предыдущий пост]({{ site.baseurl }}/2011/10/24/delegate-equality-valuetype.html)? Как вам такое продолжение истории:
