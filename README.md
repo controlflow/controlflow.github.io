@@ -1,1 +1,1 @@
-# controlflow.github.io
+Proceed to my [personal dev blog](https://controlflow.github.io)
