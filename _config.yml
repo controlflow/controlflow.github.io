@@ -1,13 +1,11 @@
 # Site settings
 title: "control::flow"
-email: your-email@domain.com
+email: shvedov89@gmail.com
 description: > # this means to ignore newlines until "baseurl:"
-  control::flow — персональный блог о программировании, языках программирования
-  C# и F#, IDE-инструментах и компиляторах, среде исполнения CLR и системах типов.
+  control::flow — персональный блог о языках программирования C# и F#,
+  IDE-инструментах и компиляторах, среде исполнения CLR и системах типов.
 baseurl: "" # the subpath of your site, e.g. /blog/
 url: "http://controlflow.github.io"
-twitter_username: controlflow
-github_username:  controlflow
 
 # Build settings
 # markdown: kramdown
