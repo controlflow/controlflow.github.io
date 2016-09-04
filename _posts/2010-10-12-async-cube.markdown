@@ -2,7 +2,6 @@
 layout: post
 title: "Async cube"
 date: 2010-10-12 00:41:56
-categories: 1293899198
 ---
 Не могу сюда не положить:
 

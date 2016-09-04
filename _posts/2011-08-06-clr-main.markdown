@@ -2,7 +2,6 @@
 layout: post
 title: "Что в CLR может выполниться до метода Main()?"
 date: 2011-08-06 18:01:00
-categories: 8558344372
 author: Шведов Александр
 tags: cas clr dotnet entry point module reflection.emit sre
 ---

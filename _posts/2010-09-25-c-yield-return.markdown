@@ -2,7 +2,6 @@
 layout: post
 title: "C# yield return"
 date: 2010-09-25 17:52:00
-categories: 1185163082
 tags: csharp enumerable iterator yield return
 ---
 До недавнего времени совсем не знал, что методы-итераторы в C# (ещё с версии 2.0) могут возвращать типы, отличные от `IEnumerable<T>`:

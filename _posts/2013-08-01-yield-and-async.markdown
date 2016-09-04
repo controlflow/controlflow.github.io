@@ -2,7 +2,6 @@
 layout: post
 title: "Итераторы и async-методы C# - так ли они похожи?"
 date: 2013-08-01 21:48:00
-categories: 57082457611
 author: Шведов Александр
 tags: csharp async yield return closures enumerable
 ---

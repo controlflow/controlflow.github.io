@@ -2,7 +2,6 @@
 layout: post
 title: "Необработанные исключения из потока GC в CLR"
 date: 2011-11-21 01:23:15
-categories: 13081157113
 author: Шведов Александр
 tags: csharp clr dotnet .net gc exceptions
 ---

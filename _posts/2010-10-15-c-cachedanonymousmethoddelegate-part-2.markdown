@@ -2,7 +2,6 @@
 layout: post
 title: "C# CachedAnonymousMethodDelegate (part 2)"
 date: 2010-10-15 11:26:07
-categories: 1319066128
 tags: csharp cache delegate anonymous
 ---
 На самом деле, кэширование экземпляров делегатов из статических методов - не единственный случай применения подобной оптимизаций компилятором C#.

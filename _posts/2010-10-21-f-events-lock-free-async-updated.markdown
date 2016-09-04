@@ -2,7 +2,6 @@
 layout: post
 title: "F# events + lock-free + async (updated)"
 date: 2010-10-21 02:05:00
-categories: 1361833918
 tags: fsharp events delegate lock-free subscription
 ---
 Сегодня речь пойдёт о механизме событий в F#. Не смотря на то, что F# обладает такой замечательно штукой, как события первого класса, мне не очень понравилось как организована работа с событиями внутри.

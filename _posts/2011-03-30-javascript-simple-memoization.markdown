@@ -2,7 +2,6 @@
 layout: post
 title: "JavaScript simple memoization"
 date: 2011-03-30 18:53:00
-categories: 4210112018
 tags: js javascript jscript memoize
 ---
 Последнее время меня увлекает изучать тонкие моменты ECMAScript по такому офигенному сборнику нюансов, как [javascript garden](http://bonsaiden.github.com/JavaScript-Garden/). Пока я ковыряю язык, рождаются собственные js-велосипеды, которые мне грустно выбрасывать, поэтому возникло желание их тут выкладывать.

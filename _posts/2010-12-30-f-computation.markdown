@@ -2,7 +2,6 @@
 layout: post
 title: "Мемоизация выражений F# + синтаксис computation expressions"
 date: 2010-12-30 16:57:00
-categories: 2527232779
 tags: fsharp memoize expressions compiler comparer equality computation expressions
 ---
 Сегодня предлагаю вашему вниманию ещё один, наиболее извращённый способ мемоизации в F#. Цель - получить удобный синтаксис для выделения частей функций, подвергаемых мемоизации без явного указания параметров, например:

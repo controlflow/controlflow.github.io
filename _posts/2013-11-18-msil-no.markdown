@@ -2,7 +2,6 @@
 layout: post
 title: "Скажи MSIL-опкоду no."
 date: 2013-11-18 18:52:00
-categories: 67371415583
 author: Шведов Александр
 tags: csharp clr cli rotor managed
 ---

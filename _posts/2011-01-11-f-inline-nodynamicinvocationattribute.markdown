@@ -2,7 +2,6 @@
 layout: post
 title: "F# inline & NoDynamicInvocationAttribute"
 date: 2011-01-11 21:01:00
-categories: 2700039671
 tags: fsharp inline nodynamicinvocation generics reflection peverify csharp
 ---
 Отвлечёмся ненадолго от монад и поговорим о такой специфичной для F# штуки, как `inline`-определения (`let`-привязки и `member`-декларации в определениях типов). Такие определения позволяют использовать в F# дополнительные ограничения на типы-параметры (*nullness constraints*, *member constraints*), оптимизировать код (засчёт принудительного встраивания кода), это некая надстройка над системой типов .NET, *специфичная только для F#*.

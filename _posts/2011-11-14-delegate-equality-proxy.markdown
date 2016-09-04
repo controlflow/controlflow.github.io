@@ -2,7 +2,6 @@
 layout: post
 title: "Delegate equality и делегаты из методов интерфейсов"
 date: 2011-11-14 14:12:31
-categories: 12785690295
 author: Шведов Александр
 tags: csharp clr delegate .net interface
 ---

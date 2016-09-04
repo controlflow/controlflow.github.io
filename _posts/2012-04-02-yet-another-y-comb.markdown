@@ -2,7 +2,6 @@
 layout: post
 title: "Очередной Y-комбинатор на C#"
 date: 2012-04-02 17:18:39
-categories: 20348899021
 author: Шведов Александр
 tags: y combinator csharp delegates
 ---

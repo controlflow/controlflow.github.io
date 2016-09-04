@@ -2,7 +2,6 @@
 layout: post
 title: "Что нового в F# 3.0 - part 1: автосвойства"
 date: 2012-03-14 15:56:08
-categories: 19288086890
 author: Шведов Александр
 tags: fsharp autoprops fprog
 ---

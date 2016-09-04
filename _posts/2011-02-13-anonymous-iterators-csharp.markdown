@@ -2,7 +2,6 @@
 layout: post
 title: "Анонимные итераторы в C#?"
 date: 2011-02-13 22:00:00
-categories: 3276310698
 tags: csharp async yield yield return await try finally asyncctp asyncenumerator lambda-expressions
 ---
 Сегодня мы поиграем с новыми фичами C# 5.0 из состава [Async CTP](http://www.microsoft.com/downloads/en/details.aspx?FamilyID=18712f38-fcd2-4e9f-9028-8373dc5732b2&displaylang=en), а конкретно с новыми трансформациями на уровне компилятора для поддержки ключевых слов `async`/`await` (скорее всего в релизе эти ключевые слова будут другими, общественность не радостно встретила такой выбор). [Тут](http://www.microsoft.com/downloads/en/details.aspx?FamilyID=C59F7633-37C7-4364-8F13-EFDB1E5CCB21) лежит спека с подробным описанием нововведений, однако на данный момент компилятор C# не сильно ей следует.

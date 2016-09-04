@@ -2,7 +2,6 @@
 layout: post
 title: "F# computation expressions - part 1: maybe { ... }"
 date: 2011-01-02 14:17:00
-categories: 2566374343
 tags: fsharp computation expressions monads maybe option
 ---
 Ну как можно не посветить монадам первый пост в новом году?

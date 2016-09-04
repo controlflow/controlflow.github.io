@@ -2,7 +2,6 @@
 layout: post
 title: "F# StructuredFormatDisplayAttribute"
 date: 2011-01-18 21:10:00
-categories: 2813440808
 tags: fsharp printf sprintf StructuredFormatDisplayAttribute
 ---
 Совсем маленький пост про совсем неизвестный атрибут `StructuredFormatDisplayAttribute` из состава стандартной бибилиотеки F#. Данный атрибут позволяет управлять логикой преобразования значений к текстовому виду согласно спецификатору формата `%A` (то есть при использовании функций `printf`, `sprintf` и других из модуля `Printf`) и отображению значений данного типа в интерактивной консоли F#. Обычно, определяя пользовательский тип:

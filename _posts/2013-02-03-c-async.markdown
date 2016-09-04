@@ -2,7 +2,6 @@
 layout: post
 title: "Немного заметок про C# async"
 date: 2013-02-03 21:26:00
-categories: 42202826803
 author: Шведов Александр
 tags: csharp async resharper
 ---

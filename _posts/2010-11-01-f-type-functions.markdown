@@ -2,7 +2,6 @@
 layout: post
 title: "F# type functions"
 date: 2010-11-01 00:00:00
-categories: 1448586103
 tags: fsharp type function generalizable typeof let
 ---
 Всем привет! Сегодня, по совету Владимира Матвеева (не могу не упомянуть [новый](http://intellifactory.com/blogs/vladimir.matveev/) и [старый](http://v2matveev.blogspot.com/) блоги), попытаюсь осветить такую интересную и редкую тему, как F# *type functions*.

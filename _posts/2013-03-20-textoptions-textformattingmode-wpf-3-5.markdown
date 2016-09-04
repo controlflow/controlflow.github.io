@@ -3,7 +3,6 @@ layout: post
 title: "TextOptions.TextFormattingMode и WPF 3.5"
 date: 2013-03-20 13:04:00
 author: Шведов Александр
-categories: 45826895421
 ---
 Меня всегда убивало качество шрифтов в WPF и Silverlight, но слава Вселенной, что с приходом WPF 4.0 появилось замечательное attached-свойство [`TextOptions.TextFormattingMode`](http://msdn.microsoft.com/en-us/library/system.windows.media.textoptions.textformattingmode.aspx), задав которое в значение `Display` можно получить качество шрифтов, неотличимое от GDI’ного. Однако по понятным причинам им невозможно воспользоваться в приложениях, собранных под WPF 3.5, но запускающихся в большинстве случаев под WPF 4.0, что крайне обидно. Решается рефлексией и утилкой, которой мне зачем-то захотелось с вами поделиться:
 

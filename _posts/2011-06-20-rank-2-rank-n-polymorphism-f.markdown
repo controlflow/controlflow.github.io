@@ -2,7 +2,6 @@
 layout: post
 title: "Эмуляция rank-2/rank-N polymorphism в F#"
 date: 2011-06-20 18:53:00
-categories: 6724653975
 tags: fsharp haskell polymorphism rank-2 rank-n types fprog
 ---
 После длительного перерыва решил таки продолжить вести свои странные записи, теперь уже инженера по специальности 230101 “Вычислительные машины, комплексы, системы и сети” :)

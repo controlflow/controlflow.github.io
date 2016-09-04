@@ -2,7 +2,6 @@
 layout: post
 title: "F# mutable let inside sequence expressions"
 date: 2010-10-11 13:31:36
-categories: 1290479053
 tags: fsharp seq ienumerable mutable sequence
 ---
 Наткнулся на интересные грабли в F# при попытке использовать изменяемые let-привязки внутри sequence expressions, данный код компилируется и работает:

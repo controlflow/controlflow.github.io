@@ -2,7 +2,6 @@
 layout: post
 title: "F# Research Compiler with Joinads!"
 date: 2011-03-28 23:08:00
-categories: 4165351185
 tags: fsharp joinads expreremental compiler computation expressions monads
 ---
 Совсем недавно Tomas Petricek выложил в свет (оригинальный пост [здесь](http://tomasp.net/blog/fsharp-variations-joinads.aspx)) эксперементальную сборку компилятора F# 2.0, поддерживающую механизм под названием *joinads*, а так же некоторые дополнительные модификации.

@@ -2,7 +2,6 @@
 layout: post
 title: "Type Application"
 date: 2010-09-29 13:32:51
-categories: 1209803041
 tags: fsharp generics
 ---
 Забавно, в F# можно применить не обобщённые типы/функции к пустому списку типов-аргументов:

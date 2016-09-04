@@ -2,7 +2,6 @@
 layout: post
 title: "F# sequence expressions bug"
 date: 2010-10-08 10:58:23
-categories: 1267960448
 tags: fsharp seq ienumerable dispose finally
 ---
 Нашёл занятный баг в F# 2.0:

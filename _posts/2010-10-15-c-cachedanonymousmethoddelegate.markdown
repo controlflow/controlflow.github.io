@@ -2,7 +2,6 @@
 layout: post
 title: "C# CachedAnonymousMethodDelegate"
 date: 2010-10-15 01:25:47
-categories: 1315695183
 tags: csharp delegate cache csc
 ---
 Попытаюсь немного осветить такую мутную тему, как кэширование экземпляров делегатов компилятором С#.

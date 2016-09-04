@@ -2,7 +2,6 @@
 layout: post
 title: "Хитрый способ кэширования Expression Trees"
 date: 2011-09-06 09:00:06
-categories: 9869744363
 author: Шведов Александр
 tags: csharp expressions linq INotifyPropertyChanged mvvm
 ---

@@ -2,7 +2,6 @@
 layout: post
 title: "Совсем немного про type kinds"
 date: 2011-10-17 21:10:00
-categories: 11576724386
 author: Шведов Александр
 tags: haskell fprog types type theory kinds
 ---

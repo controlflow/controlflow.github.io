@@ -2,7 +2,6 @@
 layout: post
 title: "PhoneOrientationBehavior для WP7"
 date: 2012-01-08 20:52:00
-categories: 15516776088
 author: Шведов Александр
 tags: csharp wp7 .net behavior
 ---
