@@ -6,7 +6,4 @@ description: >
 baseurl: ""
 url: "http://controlflow.github.io"
 
-markdown: redcarpet
-
-redcarpet:
-  extensions: ["strikethrough"]
+markdown: kramdown
