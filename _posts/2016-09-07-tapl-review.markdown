@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "«Типы в языках программирования». Бенджамин Пирс"
-date: 2015-04-08 17:54:00
+date: 2016-09-07 10:00:00
 author: Шведов Александр
 tags: tapl typesystems types
 ---
