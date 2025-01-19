@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Дизайн и эволюция свойств в C# (часть 2)"
+title: "Design and evolution of properties in C# (part 1)"
 date: 2015-04-08 17:53:00
 author: Aleksandr Shvedov
 tags: csharp properties design

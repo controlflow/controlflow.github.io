@@ -189,7 +189,7 @@ M(ref x); // read-write usage
 
 Unfortunately, `ref`/`out` parameters in C# are as low-level as fields. The runtime treats `ref`/`out` parameters as special managed reference types, different from regular unmanaged pointers only in their disallowance of arithmetic operations and the awareness of GC about objects pointed to by such references.
 
-Due to the inability to turn the two property accessor methods into a single pointer to a mutable memory region, the C# compiler simply doesn’t allow passing properties to `ref`/`out` parameters. This is rarely needed in practice, but it does seem like a "spontaneous symmetry break" in the language. Interestingly, another .NET language — VisualBasic.NET — hides the difference between properties and fields from the user:
+Due to the inability to turn the two property accessor methods into a single pointer to a mutable memory region, the C# compiler simply doesn’t allow passing properties to `ref`/`out` parameters. This is rarely needed in practice, but it does seem like a "spontaneous symmetry breaking" in the language. Interestingly, another .NET language — VisualBasic.NET — hides the difference between properties and fields from the user:
 
 ```vb
 Sub F(ByRef x As integer)

@@ -14,10 +14,10 @@ tags: fsharp type function generalizable typeof let
 Вместо встроенных в язык и грамматику конструкций, F# предлагает в стандартной библиотеке несколько таких значений, обладающих функционалом соответствующих операторов C#:
 
 ```c#
-typeof(List<T>)     =>  typeof<List<T>>
-typeof(Action<,,>)  =>  typedefof<Action<_,_,_>>
-default(decimal)    =>  Unchecked.defaultof<decimal>
-sizeof(int)         =>  sizeof<int>
+typeof(List<T>)     =>  typeof<List<T>>
+typeof(Action<,,>)  =>  typedefof<Action<_,_,_>>
+default(decimal)    =>  Unchecked.defaultof<decimal>
+sizeof(int)         =>  sizeof<int>
 ```
 
 Стоит отметить, что в C# введён специальный синтаксис для получения generic type definition (открытого generic-типа) – надо вовсе не указывать все типы-параметры, например: `Action<>` или `Dictionary<,>`. Однако в F# явные типы-параметры надо указывать всегда (отдельного синтаксиса не предусмотрено), поэтому для получения generic type definition следует пользоваться отдельным значением `typedefof<T>`, в качестве `T` указав *generic-тип с любыми возможными конкретными типами-параметрами*. Иногда можно применить небольшой приём для улучшения читаемости кода: указать в качестве типов-параметров `_` – тогда вывод типов автоматически выведет соответствующие типы-параметры в тип `obj` (как в примере выше).
@@ -42,20 +42,20 @@ Map.empty
 ```fsharp
 // Список иерархии классов для типа 'T
 let typeHierarchy<'T> =
-  let rec loop ts (t: System.Type) =
-    if t = null then ts
-                else loop (t::ts) t.BaseType
-  loop [] typeof<'T>
+  let rec loop ts (t: System.Type) =
+    if t = null then ts
+                else loop (t::ts) t.BaseType
+  loop [] typeof<'T>
 ```
 
 Использование:
 
 ```fsharp
 typeHierarchy<System.IO.FileStream>
- |> List.map (fun t -> t.Name);;
+ |> List.map (fun t -> t.Name);;
 
 val it : string list =
-  ["Object"; "MarshalByRefObject"; "Stream"; "FileStream"]
+  ["Object"; "MarshalByRefObject"; "Stream"; "FileStream"]
 ```
 
 Однако следует обратить внимание на то, что явное перечисление типов-аргументов для let-привязок внутри выражений, определений типов и computation expressions запрещено, то есть type functions в F# можно определить только на уровне модуля.
@@ -64,8 +64,8 @@ val it : string list =
 
 ```fsharp
 type Foo =
-   member this.ServicesOfType<'T>(name: string) =
-     ...
+   member this.ServicesOfType<'T>(name: string) =
+     ...
 
 Foo.ServicesOfType() // компилируется, но 'T = obj!
 ```
@@ -76,8 +76,8 @@ Foo.ServicesOfType() // компилируется, но 'T = obj!
 let myEmptyList<'a> = List.empty<'a>
 
 let func() =
-  let empty = myEmptyList
-  (1 :: empty, "a" :: empty) // error
+  let empty = myEmptyList
+  (1 :: empty, "a" :: empty) // error
 ```
 
 Получаем ошибку следующего содержания:
@@ -88,8 +88,8 @@ let func() =
 
 ```fsharp
 let func() =
-  let empty() = myEmptyList
-  (1 :: empty(), "a" :: empty()) // fine
+  let empty() = myEmptyList
+  (1 :: empty(), "a" :: empty()) // fine
 ```
 
 Как раз для решения данной проблемы применяется атрибут `[<GeneralizableValue>]`. После аннотации type function данным атрибутом, значение начинает рассматриваться как полиморфное и принимать участие в автоматическом обобщении:
@@ -99,8 +99,8 @@ let func() =
 let myEmptyList<'a> = List.empty<'a>
 
 let func() =
-  let empty = myEmptyList
-  (1 :: empty, "a" :: empty) // fine
+  let empty = myEmptyList
+  (1 :: empty, "a" :: empty) // fine
 ```
 
 Обычно type function следует обязательно отмечать либо атрибутом `[<GeneralizableValue>]`, либо `[<RequiresExplicitTypeArguments>]`, в зависимости от сценария использования.

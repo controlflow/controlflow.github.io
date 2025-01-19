@@ -15,13 +15,13 @@ open System
 let source : int IObservable = ...
 
 let rec subscription : IDisposable =
-  source.Subscribe {
-    new IObserver<int> with
-      member o.OnNext(x) =
-        if x > 0 then
-          subscription.Dispose()
-      ...
-  }
+  source.Subscribe {
+    new IObserver<int> with
+      member o.OnNext(x) =
+        if x > 0 then
+          subscription.Dispose()
+      ...
+  }
 ```
 
 То есть мы использовали значение `subscription` внутри самого определения того, чем же `subscription` будет на самом деле являться. Ключевой момент тут заключается в том, что все обращения к `subscription` внутри `IObserver`'а являются отложенными, они не будут производиться во время вызова `Subscribe()`, иначе это приводило либо к ошибке компиляции, если компилятор может выяснить, что использование не является отложенным:
@@ -36,7 +36,7 @@ let rec foo : int = foo
 
 ```fsharp
 let rec foo =
-    let f() = foo + 1 in f()
+    let f() = foo + 1 in f()
 ```
 
 > **System.InvalidOperationException:** ValueFactory attempted to access the Value property of this instance.
@@ -45,20 +45,20 @@ let rec foo =
 
 ```fsharp
 let rec fibs =
-    seq { yield 0
-          yield! Seq.scan (+) 1 fibs
-    } |> Seq.cache
+    seq { yield 0
+          yield! Seq.scan (+) 1 fibs
+    } |> Seq.cache
 ```
 
 Или более «понятный» вариант, через сложение последовательности с самой собой, смещённой на один элемент:
 
 ```fsharp
 let rec fibs' =
-    seq { yield 0
-          yield 1
-          yield! Seq.map2 (+)
-                    (Seq.skip 1 fibs')
-                               (fibs')
+    seq { yield 0
+          yield 1
+          yield! Seq.map2 (+)
+                    (Seq.skip 1 fibs')
+                               (fibs')
     } |> Seq.cache
 ```
 
@@ -80,18 +80,18 @@ let rec fibs' =
 module LetRec
 
 let rec foo =
-  let neverUsed() = foo + 1
-  in 0
+  let neverUsed() = foo + 1
+  in 0
 ```
 
 Реально компилятор F# транлирует в примерно следующий код:
 
 ```fsharp
 let rec private foo' =
-  lazy (
-    let neverUsed() = Lazy.force foo' + 1
-    in 0
-  )
+  lazy (
+    let neverUsed() = Lazy.force foo' + 1
+    in 0
+  )
 
 let foo = Lazy.force foo'
 ```
@@ -104,13 +104,13 @@ let foo = Lazy.force foo'
 let mutable f = (fun() -> 0)
 
 try
-  let rec foo : int =
-    f <- (fun() -> foo) // сохраняем обращение к foo в f
-    failwith "uups!"    // и выбрасываем исключение
+  let rec foo : int =
+    f <- (fun() -> foo) // сохраняем обращение к foo в f
+    failwith "uups!"    // и выбрасываем исключение
 
-  printfn "foo = %d" foo
+  printfn "foo = %d" foo
 with e ->
-  printfn "foo = %A" e.Message
+  printfn "foo = %A" e.Message
 ```
 
 > foo = uups!
@@ -119,9 +119,9 @@ with e ->
 
 ```fsharp
 try
-  printfn "f() = %d" (f())
+  printfn "f() = %d" (f())
 with e ->
-  printfn "f() = %A" e.Message
+  printfn "f() = %A" e.Message
 ```
 
 > f() = uups!
@@ -132,6 +132,6 @@ with e ->
 var subscribtion = new System.Disposables.MutableDisposable();
 
 subscribtion.Disposable = source.Subscribe(x => {
-  if (x > 0) subscribtion.Dispose();
+  if (x > 0) subscribtion.Dispose();
 });
 ```

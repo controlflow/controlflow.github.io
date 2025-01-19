@@ -8,20 +8,20 @@ tags: csharp attributes typevar
 Забавно, не смотря на то, что грамматика C# для указания аннотируемого атрибутом элемента языка, предусматривает ограниченный набор значений:
 
 > *attribute-section:*<br/>
->     [ *attribute-target-specifier<sub>opt</sub>  attribute-list* ]<br/>
->     [ *attribute-target-specifier<sub>opt</sub>  attribute-list ,* ]<br/>
+>     [ *attribute-target-specifier<sub>opt</sub>  attribute-list* ]<br/>
+>     [ *attribute-target-specifier<sub>opt</sub>  attribute-list ,* ]<br/>
 > <br/>
 > *attribute-target-specifier:*<br/>
->     *attribute-target :*<br/>
+>     *attribute-target :*<br/>
 > <br/>
 > *attribute-target:*<br/>
->     `field`<br/>
->     `event`<br/>
->     `method`<br/>
->     `param`<br/>
->     `property`<br/>
->     `return`<br/>
->     `type`
+>     `field`<br/>
+>     `event`<br/>
+>     `method`<br/>
+>     `param`<br/>
+>     `property`<br/>
+>     `return`<br/>
+>     `type`
 
 На деле (компилятор С# 4.0) всё оказывается несколько иначе, код:
 
