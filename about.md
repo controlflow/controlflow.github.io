@@ -1,10 +1,9 @@
 ---
 layout: page
-title: О блоге
+title: About
 permalink: /about/
 ---
 
-Меня зовут Шведов Александр, я .NET-разработчик из Москвы. Если вы это читаете, то судьба занесла вас в мой полуживой блог о программировании. Здесь я размышляю о дизайне языков программирования, IDE-инструментах и компиляторах, средах исполнения и системах типов.
+My name is Aleksandr Shvedov, I'm a .NET developer currently residing in Amsterdam, Netherlands. This is my small blog about programming. Here, I reflect on the design of programming languages, IDE tools and compilers, runtime environments, and type systems.
 
-С 2011 года я работаю в компании [JetBrains](https://www.jetbrains.com/) и занимаюсь IDE-инструментарием [ReSharper](https://www.jetbrains.com/resharper), где отвечаю за поддержку языков C# и XAML. Придумываю такие IDE-фичи как, например, [постфиксные шаблоны кода](https://github.com/controlflow/resharper-postfix), подсветка [аллокаций в коде](https://github.com/controlflow/resharper-heapview), быстрый [текстовый поиск](https://github.com/controlflow/resharper-gotoword) и другие.
-
+Since year 2011 I have been working at [JetBrains](https://www.jetbrains.com/) on the IDE tooling for .NET languages ([ReSharper](https://www.jetbrains.com/resharper) and [Rider](https://www.jetbrains.com/rider) IDE). At JetBrains I lead the team of talanted engeneers focused on IDE language support for managed languages (C#, VB.NET, F#) and other core IDE experiences (code analysis, code refactorings, code completion, etc).

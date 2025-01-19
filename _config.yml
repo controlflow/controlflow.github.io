@@ -1,9 +1,14 @@
 title: "control::flow"
 email: shvedov89@gmail.com
 description: >
-  control::flow — персональный блог о языках программирования C# и F#,
-  IDE-инструментах и компиляторах, среде исполнения CLR и системах типов
+  control::flow — a personal blog about C# programming language, IDE tooling, compilers and .NET runtime
 baseurl: ""
 url: "http://controlflow.github.io"
 
+lsi: false
+safe: true
 markdown: kramdown
+highlighter: rouge
+kramdown:
+  math_engine: mathjax
+  syntax_highlighter: rouge
