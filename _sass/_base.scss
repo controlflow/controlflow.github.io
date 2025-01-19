@@ -179,12 +179,14 @@ pre {
 .icon {
     > svg {
         display: inline-block;
-        width: 16px;
-        height: 16px;
+        opacity: 0.2;
+        width: 36px;
+        height: 36px;
         vertical-align: middle;
-
-        path {
-            fill: $grey-color;
-        }
     }
+}
+
+.username {
+    padding-left: 5px;
+    color: #8e8eaf;
 }
