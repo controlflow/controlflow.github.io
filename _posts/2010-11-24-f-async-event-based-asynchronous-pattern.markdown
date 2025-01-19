@@ -2,6 +2,7 @@
 layout: post
 title: "F# async + event-based asynchronous pattern"
 date: 2010-11-24 03:37:00
+author: Aleksandr Shvedov
 tags: fsharp csharp async workflow event-based asynchronous pattern
 ---
 Сегодня предлагаю поговорить о модели асинхронного программирования в .NET, основанной на событиях ([event-based asynchronous pattern](http://msdn.microsoft.com/en-us/library/wewwczdw.aspx)). Если вкратце, то всё очень просто:

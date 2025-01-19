@@ -2,6 +2,7 @@
 layout: post
 title: "F# computation expressions - part 3: cont { ... }"
 date: 2011-01-06 17:04:00
+author: Aleksandr Shvedov
 tags: fsharp monads computation expressions cont async callcc
 ---
 Настало время монады [`cont`](http://hackage.haskell.org/packages/archive/mtl/2.0.0.0/doc/html/Control-Monad-Cont.html) и страшного оператора `callCC`. Понимать смысл `cont` очень важно не только потому, что это [мама всех монад](http://blog.sigfpe.com/2008/12/mother-of-all-monads.html), но и для того, чтобы дружить с *[continuation passing style](http://blogs.msdn.com/b/ericlippert/archive/tags/continuation+passing+style/)*, не редко встречающимся в функциональном программировании. Более того, `async` из состава стандартной бибилиотеки F# тоже представляет собой монаду `cont`, только не с одним продолжением `k`, а тремя (обычное продолжение, продолжение при возникновение исключения и продолжение при запросе отмены async workflow), а так же инфраструктурой для управления потоками и контекстами синхронизации.

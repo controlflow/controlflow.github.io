@@ -2,6 +2,7 @@
 layout: post
 title: "Async cube"
 date: 2010-10-12 00:41:56
+author: Aleksandr Shvedov
 ---
 Не могу сюда не положить:
 

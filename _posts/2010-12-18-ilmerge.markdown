@@ -2,6 +2,7 @@
 layout: post
 title: "Сам себе ILMerge"
 date: 2010-12-18 22:03:00
+author: Aleksandr Shvedov
 tags: csharp ilmerge assembly msbuild assemblyresolve
 ---
 Сегодня поговорим о том, как можно обойтись без [ILMerge](http://research.microsoft.com/en-us/people/mbarnett/ilmerge.aspx) если вам требуется скрыть сборки, от которых вы зависите, внутри единого exe-файла. Дело в том, что .NET позволяет вмешиваться в процесс поиска требуемых сборок, путём подписки на событие [`AppDomain.AssemblyResolve`](http://msdn.microsoft.com/en-us/library/system.appdomain.assemblyresolve.aspx) для конкретного домена. Подписчик на событие должен вернуть загруженный экземпляр класса `System.Reflection.Assembly`, если сборка с именем `args.Name` может быть им найдена или вернуть `null` в противном случае. Если подписаться на данное событие до того момента, как приложению понадобится зависимая сборка, то можно запросто загрузить требуемую сборку из embedded-ресурсов приложения.

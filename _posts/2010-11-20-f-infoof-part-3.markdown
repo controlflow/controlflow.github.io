@@ -2,6 +2,7 @@
 layout: post
 title: "F# infoof (part 3)"
 date: 2010-11-20 18:51:00
+author: Aleksandr Shvedov
 tags: fsharp pattern-matching patterns infoof
 ---
 Наш модуль осталось дополнить лишь такими функциями, как `fieldinfo` (реализация практически идентична `propertyinfo`), `constructorof` (получение `System.Reflection.` `ConstructorInfo` по выражению создания экземпляров объектов) и `unioncaseof` (получение `Microsoft.FSharp.Reflection.UnionCaseInfo` по выражению вызова конструктора типа-объдинения F#). Все они достаточно тривиальны, поэтому лишь привожу окончательную реализацию модуля `MemberInfo`.

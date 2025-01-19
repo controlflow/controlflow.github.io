@@ -2,6 +2,7 @@
 layout: post
 title: "Disassembly view и goto from try { }"
 date: 2011-02-11 17:43:00
+author: Aleksandr Shvedov
 tags: asm assembly visualstudio debugging try finally goto
 ---
 Вот мне всегда было интересно как имплементится на машинном уровне поведение такого кода:

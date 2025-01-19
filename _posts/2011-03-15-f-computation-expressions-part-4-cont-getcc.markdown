@@ -2,6 +2,7 @@
 layout: post
 title: "F# computation expressions - part 4: cont + getCC"
 date: 2011-03-15 14:00:00
+author: Aleksandr Shvedov
 tags: fsharp cont computation expressions monads callcc getcc
 ---
 Недавно открыл для себя интересную функцию, предназначенную для работы с монадой continuation - [`getCC`](http://web.archiveorange.com/archive/v/nDNOv9Pf55aKSZYSQ1bg). Эта функция представляет собой `callCC`, как бы возвращающий из себя переданное ему продолжение. То есть становится возможно из любой точки computation expressions получить текущее продолжение и использовать его позже. Фактически это позволяет моделировать `goto` и императивные циклы внутри композиции `cont`-вычислений и замечательно запутывать поток исполнения.

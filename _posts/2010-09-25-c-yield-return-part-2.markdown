@@ -2,6 +2,7 @@
 layout: post
 title: "C# yield return (part 2)"
 date: 2010-09-25 22:19:25
+author: Aleksandr Shvedov
 tags: csharp yield enumerable
 ---
 Допустим есть метод-итератор:

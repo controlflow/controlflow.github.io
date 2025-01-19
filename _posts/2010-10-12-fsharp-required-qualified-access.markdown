@@ -2,6 +2,7 @@
 layout: post
 title: "F# RequiredQualifiedAccessAttribute"
 date: 2010-10-12 00:35:49
+author: Aleksandr Shvedov
 ---
 Наверняка многие видели в F# атрибут `[<RequiredQualifiedAccess>]` или натыкались на невозможность открытия модулей `Seq`, `List` и некоторых других с помощью ключевого слова `open`. К примеру, в случае такого определения модуля:
 

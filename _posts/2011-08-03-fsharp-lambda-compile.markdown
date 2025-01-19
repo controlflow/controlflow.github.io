@@ -2,6 +2,7 @@
 layout: post
 title: "Особенности компиляции значений функционального типа в F#"
 date: 2011-08-03 19:02:00
+author: Aleksandr Shvedov
 tags: fsharp lambda-expressions closure compiler fprog
 ---
 Продолжаю тему, поднятую [предыдущем постом]({{ site.baseurl }}/2011/08/02/csharp-lambda-compile.html) - трансформации компиляторов .NET-языков, связанные с компиляцией различных анонимных методов/лямбда-выражений.

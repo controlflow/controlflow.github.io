@@ -2,17 +2,20 @@
  * Syntax highlighting styles
  */
 .highlight {
-    background: #fff;
+    //background: #fff;
+    margin-left: 2em;
+    margin-right: 2em;
+
     @extend %vertical-rhythm;
 
-    .c     { color: #AAA } // Comment
+    .c     { color: #0d8f18 } // Comment
     .err   { color: #a61717 } // Error
     .k     { color: #6060B0 } // Keyword
     .o     { } // Operator
-    .cm    { color: #AAA } // Comment.Multiline
-    .cp    { color: #AAA } // Comment.Preproc
-    .c1    { color: #AAA } // Comment.Single
-    .cs    { color: #AAA } // Comment.Special
+    .cm    { color: #0d8f18 } // Comment.Multiline
+    .cp    { color: #0d8f18 } // Comment.Preproc
+    .c1    { color: #0d8f18 } // Comment.Single
+    .cs    { color: #0d8f18 } // Comment.Special
     .gd    { color: #000; background-color: #fdd } // Generic.Deleted
     .gd .x { color: #000; background-color: #faa } // Generic.Deleted.Specific
     .ge    { font-style: italic } // Generic.Emph

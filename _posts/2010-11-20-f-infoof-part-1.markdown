@@ -2,6 +2,7 @@
 layout: post
 title: "F# infoof (part 1)"
 date: 2010-11-20 04:15:00
+author: Aleksandr Shvedov
 tags: fsharp infoof quotations patterns pattern-matching
 ---
 Сегодня предлагаю обсудить такие элементы F#, как совпадение с образцом (*pattern matching*) и активные образцы F# (*active patterns*), которые незаменимы, при работе с цитированием кода (*F# quotations*). В качестве задания, попробуем написать набор функций, логически похожих на `typeof<T>` и предназначенных получения различных наследников `System.Reflection.MemberInfo` для заданных свойств, методов, функций, конструкторов и прочих элементов кода. То есть напишем на F# аналог несуществующего оператора `infoof()` (читай *info-of*), аналоги которого все кому не лень, реализуют в C# на базе *Expression Trees*, например, [вот](http://codebetter.com/blogs/patricksmacchia/archive/2010/06/28/elegant-infoof-operators-in-c-read-info-of.aspx) (обсуждение Эрика Липперта [здесь](http://blogs.msdn.com/b/ericlippert/archive/2009/05/21/in-foof-we-trust-a-dialogue.aspx)).

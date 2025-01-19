@@ -2,6 +2,7 @@
 layout: post
 title: "F# computation expressions - part 2: state { ... }"
 date: 2011-01-02 16:32:00
+author: Aleksandr Shvedov
 tags: fsharp computation expressions monads state
 ---
 К моему сожалению, на языке с энергичным порядком вычислений, коим является F#, невозможно выразить такие разновидности монады `state`, как её ленивая версия ([lazy state monad](http://blog.melding-monads.com/2009/12/30/fun-with-the-lazy-state-monad/), когда в состояние сохраняется не вычисленное значение, а само вычисление) и такой крышеснос, например, как [reverse state monad](http://lukepalmer.wordpress.com/2008/08/10/mindfuck-the-reverse-state-monad/) (она же [backward state monad](http://panicsonic.blogspot.com/2007/12/backwards-state-or-power-of-laziness.html)). Поэтому здесь привожу самую обычную *strict*-версию монады `state`.

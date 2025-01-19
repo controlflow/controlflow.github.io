@@ -2,6 +2,7 @@
 layout: post
 title: "F# array/list sequence expressions performance"
 date: 2011-04-19 20:00:00
+author: Aleksandr Shvedov
 tags: fsharp fprog computation expressions builders lists arrays list comprehensions seq
 ---
 Изучая разделы 6.3.13 и 6.3.14 [спецификации F#](http://research.microsoft.com/en-us/um/cambridge/projects/fsharp/manual/spec.html), я обнаружил следующие утверждения относительно вычисления выражений созданий списков `[ ]` и массивов `[| |]` (так называемые *list comprehensions*):

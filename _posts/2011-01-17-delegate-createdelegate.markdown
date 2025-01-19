@@ -2,6 +2,7 @@
 layout: post
 title: "Великий и могучий Delegate.CreateDelegate"
 date: 2011-01-17 16:19:00
+author: Aleksandr Shvedov
 tags: csharp delegate createdelegate dynamicmethod begininvoke ref valuetype
 ---
 Сегодня хотелось бы поделиться мыслями относительно замечательного метода `System.Delegate.`[`CreateDelegate`](http://msdn.microsoft.com/en-us/library/9tz542wy.aspx), доступного ещё с первых версий .NET Framework. Назначение - создать экземпляр делегата динамически по типу делегата (в виде `System.Type`) и методу, заданному в виде строкового имени или экземпляра `System.Reflection.MethodInfo`. Интерес представляет то, как данный метод позволяет сопоставить те или иные сигнатуры методов различным типам делегатов.

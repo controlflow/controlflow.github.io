@@ -2,6 +2,7 @@
 layout: post
 title: "F# infoof (part 4)"
 date: 2010-11-21 04:53:00
+author: Aleksandr Shvedov
 tags: fsharp infoof events eventof first-class events quotations pattern-matching
 ---
 Я надеялся ограничить серию постов тремя записями, но вдруг вспомнил, что совсем забыл ещё один интересный метод – `eventof`, возвращающий экземпляр `System.Reflection.EventInfo` по выражению доступа к событию. Вот только сначала надо разобраться, что есть *«выражение доступа к событию»* в языке F#. Дело в том, что событие в CLI – это всего лишь два метода (`add_EventName` и `remove_EventName`) и метаинформация, объединяющая их.

@@ -2,6 +2,7 @@
 layout: post
 title: "С# attribute-target-specifier"
 date: 2010-11-04 18:51:04
+author: Aleksandr Shvedov
 tags: csharp attributes typevar
 ---
 Забавно, не смотря на то, что грамматика C# для указания аннотируемого атрибутом элемента языка, предусматривает ограниченный набор значений:

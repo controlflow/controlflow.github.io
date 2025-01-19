@@ -2,6 +2,7 @@
 layout: post
 title: "Измерение времени исполнения кода в F#"
 date: 2011-02-05 17:29:00
+author: Aleksandr Shvedov
 tags: fsharp measure stopwatch printf sprintf threadpriority gc
 ---
 Наверняка многие из вас, дорогие читатели, писали на многих языках программирования строчки, подобные этим:
