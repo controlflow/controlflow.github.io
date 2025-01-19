@@ -1,35 +1,37 @@
 ---
 layout: post
-title: "«Типы в языках программирования». Бенджамин Пирс"
+title: "Types and Programming Languages». Benjamin C. Pierce"
 date: 2016-09-04 10:00:00
-author: Шведов Александр
+author: Aleksandr Shvedov
 tags: tapl typesystems types
 ---
 
 <img alt="tapl" src="/images/tapl.jpg" style="float: left; margin-right: 1em" width="45%" />
 
-Скажу сразу: эта книга пригодится далеко не всем программистам. В ней полно «матана», «формул» (таких, как правила типизации и вычислений) и упражнений с доказательством теорем. Так же как в научных статьях, количество полезной информации в одном предложении иногда просто зашкаливает — в начале главы/книги определяют кучу разных символов и дальше ими регулярно «обфусцируют» предложения без дополнительных объяснений. Но нас не напугать сложностью, ведь так?
+I’ll say this upfront: this book isn’t for every programmer. It’s full of "math" or "formulas" (such as typing and evaluation rules), and full of theorem prooving exercises. Similar to scientific papers, the amount of useful information in a single sentence can sometimes be overwhelming. At the start of each chapter or the book, a bunch of symbols are introduced, which are then used extensively without further explanation, making sentences feel like they’re "obfuscated." But we’re not afraid of complexity, are we?
 
-Я давно слышал о существовании этой книги, но достал ее бумажный вариант лишь во время увлечения фунциональной парадигмой программирования и ковыряния языка F#. Взгляд на новую для меня парадигму и необычную (по сравнению с C#) систему типов заставил заинтересоваться в том, что еще интересного можно встретить в системах типов и чем те или иные решения отличаются. Без сомнения могу сказать, что «Типы в языках программирования» (далее TAPL) — это настольная книга для всех, кто интересуется теорией системам типов, разрабатывает компиляторы или инструментарий для языков программирования.
+I had heard about this book for a long time, but I only got my hands on a physical copy while exploring the functional programming paradigm and tinkering with the F# language. Looking at a paradigm that was new to me and an unusual type system (compared to C#) sparked my interest in learning more about what type systems can offer and how different solutions compare. Without a doubt, Types and Programming Languages (TAPL) is a must-have reference for anyone interested in the theory of type systems, developing compilers, or building tools for programming languages.
 
-Чтобы хоть как-то понимать содержимое TAPL, придется разобраться в основах бестипового и типизированного лямбда-исчисления (главы I и II), изучить способ записи правил типизации и вычислений (эти страшные «формулы» гораздо проще, чем кажутся на первый взгляд!), а так же разобраться с синтаксисом ML-подобного языка. Без этого минимального «набора для выживания» половина книги будет казаться написанной на инопланетном языке, так что обязательно подготовьте теоретический минимум.
+To even begin to grasp the content of TAPL, you’ll need to familiarize yourself with the basics of untyped and typed lambda calculus (Chapters I and II), learn how to write typing and evaluation rules (these intimidating "formulas" are much simpler than they seem at first!), and get comfortable with the syntax of an ML-like language. Without this minimal "survival kit", half the book will feel like it’s written in an alien language, so make sure to prepare with some theoretical groundwork.
 
-.NET-программистам будет больше всего может быть полезна глава III — «Подтипы», которая фактически описывает классическое объектно-ориентированное программирование, основанное на классах. Книга объясняет и причины появления подтипов, и отвечает на массу самых фундаментальных вопросов, о которых мы обычно совсем не задумываемся, например:
+For .NET programmers, Chapter III — "Subtyping" — might be the most useful, as it essentially describes classic class-based object-oriented programming. The book explains why subtyping exists and answers a host of fundamental questions we often don’t even think about, such as:
 
-* Что представляет собой тип `Object` и какого «противоположного» ему типа нет в таких языках как C#/Java? Как типизировать функцию, которая никогда не завершается (бросает исключение)?
+* What is the type `Object`, and what type “opposite” to `Object` type is missing in languages like C#/Java? How do you assign a type for a function that never terminates (throws an exception)?
 
-* Чем отличаются структурная и номинальная (или «именная») системы типов с подтипами? Почему, например, для успешной типизации JavaScript кода в языке программирования TypeScript выбрана структурная система типов?
+* How do structural and nominal (or "name-based") type systems with subtyping differ? Why, for example, does TypeScript use a structural type system to type-check JavaScript code?
 
-* Почему в ООП-языках существуют разные вида приведения типов, в чем назначение каждого из них?
+* Why do OOP languages have different kinds of type casting, and what is the purpose of each?
 
-* Зачем применяют упаковку («боксинг») значений, для чего нужно универсальное представление значений в памяти?
+* What is the purpose of boxed values, and why is a universal memory representation of values needed?
 
-* Почему о подтипах можно думать как о множествах, но на практике используется другая семантика?
+* Why can subtypes be thought of as sets, but a different semantics is used in practice?
 
-* Чем традиционные классы в ООП отличаются от алгебраических типов данных (АДТ, применяемые в большинстве функциональных языков программирования), в чем приемущества и недостатки обоих средств?
+* How do traditional classes in OOP differ from algebraic data types (ADTs, used in most functional programming languages), and what are the pros and cons of each?
 
-* Что такое типы-объединения и типы-пересечения, набирающие популярность сейчас в языках типа TypeScript, Scala (Dotty) и Ceylon, в каком виде эти типы-пересечения встречаются в C#/Java?
+* What are union types and intersection types, which are becoming popular in languages like TypeScript, Scala (Dotty), and Ceylon? In what form are intersection types found in C#/Java?
 
-Ответы на эти и многие другие вопросы TAPL дает в предельно краткой форме, существенно отличающейся от типичной подачи ООП в книгах. Разбор императивного ООП-языка с подтипами с помощью моделирования на базе простого типизированного лямбда исчисления — это все равно что изучать язык высокого уровня с помощью декомпилятора байткода (уверен, многие программисты так делают, это отличный способ разобраться как что-то работает).
+TAPL provides concise answers to these and many other questions, vastly different from the typical presentation of OOP in books. Analyzing an imperative OOP language with subtyping using simple typed lambda calculus is like studying a high-level language through a bytecode decompiler (many programmers do this — it’s a great way to understand how something works).
+
+Note on Russian translation of TAPL book:
 
 Я не склонен читать подобную литературу на русском языке, но благодаря замечательной работе, проделанной Георгием Бронниковым и Алексом Оттом (издательство «Лямбда пресс» & «Добросвет»), перевод TAPL — это исключение, можно совсем не беспокоиться об искажении смысла или терминов.

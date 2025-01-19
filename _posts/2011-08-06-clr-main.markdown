@@ -2,7 +2,7 @@
 layout: post
 title: "Что в CLR может выполниться до метода Main()?"
 date: 2011-08-06 18:01:00
-author: Шведов Александр
+author: Aleksandr Shvedov
 tags: cas clr dotnet entry point module reflection.emit sre
 ---
 Вы задумывались когда-нибудь, может-ли некоторый код выполняться до вызова метода `Main()` (точки входа приложения) в .NET-приложении?

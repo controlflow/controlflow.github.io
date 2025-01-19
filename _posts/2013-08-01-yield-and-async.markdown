@@ -2,7 +2,7 @@
 layout: post
 title: "Итераторы и async-методы C# - так ли они похожи?"
 date: 2013-08-01 21:48:00
-author: Шведов Александр
+author: Aleksandr Shvedov
 tags: csharp async yield return closures enumerable
 ---
 Когда был анонсирован C# 5.0 с поддержкой `async`, то многие любители поворчать заметили, что в мажорной фиче как таковой нету никакой инновации, ведь товарищ Джеффри Рихтер уже сто лет назад прекрасно делал те же трюки в своей библиотечке Wintellect Power Threading с помощью типа [`AsyncEnumerator`](http://msdn.microsoft.com/en-us/magazine/cc163323.aspx) и фичи C# версии аж 2.0 - методов-итераторов.

@@ -2,7 +2,7 @@
 layout: post
 title: "Скорость копирования структур"
 date: 2011-11-19 02:16:00
-author: Шведов Александр
+author: Aleksandr Shvedov
 ---
 ![]({{ site.baseurl }}/images/struct-copy-perf.png)
 

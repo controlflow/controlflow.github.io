@@ -2,7 +2,7 @@
 layout: post
 title: "Дизайн и эволюция свойств в C# (часть 6)"
 date: 2015-04-08 17:54:00
-author: Шведов Александр
+author: Aleksandr Shvedov
 tags: csharp properties design
 ---
 

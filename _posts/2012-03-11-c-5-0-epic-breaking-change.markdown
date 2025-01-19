@@ -2,7 +2,7 @@
 layout: post
 title: "C# 5.0 epic breaking change"
 date: 2012-03-11 16:29:00
-author: Шведов Александр
+author: Aleksandr Shvedov
 tags: csharp vs11 breaking change closure capture
 ---
 Да, это случилось. В последней версии компилятора C# из состава Visual Studio “11” Beta изменилось правило разворачивания компилятором цикла `foreach`:

@@ -2,7 +2,7 @@
 layout: post
 title: "Delegate equality и квалификатор base."
 date: 2011-10-24 14:14:00
-author: Шведов Александр
+author: Aleksandr Shvedov
 tags: csharp clr .net delegate base
 ---
 Как вы думаете, что выведет на экран этот код?

@@ -2,7 +2,7 @@
 layout: post
 title: "Совсем немного про type kinds"
 date: 2011-10-17 21:10:00
-author: Шведов Александр
+author: Aleksandr Shvedov
 tags: haskell fprog types type theory kinds
 ---
 Сегодня мы поговорим о таких штуках, как kind’ы типов (иногда в русскоязычной литературе их называют “типажами”, но мне не особо нравится такой перевод).
