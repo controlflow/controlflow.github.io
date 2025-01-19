@@ -49,8 +49,8 @@ figcaption {
 ul, ol {
     text-align: justify;
     //margin-left: $spacing-unit;
-    margin-left: 0;
-    list-style-position: inside;
+    margin-left: 20px;
+    list-style-position: outside;
     list-style-type: square;
 }
 
