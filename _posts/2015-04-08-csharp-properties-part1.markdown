@@ -17,15 +17,18 @@ So today, I propose we discuss the concept of "properties" in detail using the C
 Let's go back to the days of C# 1.0 and look at the definition of a canonical DTO class encapsulating some data. Unlike Java, class declarations in C# could contain not only fields/methods/classes, but also another type of class member — property declarations:
 
 ```c#
-class Person {
+class Person
+{
   private string _name;
 
-  public Person(string name) {
+  public Person(string name)
+  {
     _name = name;
   }
 
   // property declaration:
-  public string Name {
+  public string Name
+  {
     get { return _name; }
     set { _name = value; }
   }
@@ -71,23 +74,27 @@ Moreover, experience shows that in classes it’s often convenient to expose dat
 All these issues can be solved using existing language features — by introducing a couple of methods to access a field's value, implementing these methods as members of an interface, or executing arbitrary validation code before or after writing:
 
 ```c#
-interface INamedPerson {
+interface INamedPerson
+{
   string GetName();
   SetName(string value);
   int GetYear();
 }
 
-class Person : INamedPerson {
+class Person : INamedPerson
+{
   private string _name;
 
   public string GetName() { return _name; }
 
-  public void SetName(string value) {
+  public void SetName(string value)
+  {
     if (value == null) throw new ArgumentNullException("value");
     _value = value;
   }
 
-  public int GetYear() {
+  public int GetYear()
+  {
     return DateTime.Now.Year;
   }
 }
@@ -111,23 +118,28 @@ foo.SetValue(foo.GetValue() + 42);
 Let’s take the code example above and rewrite it using C# property declarations:
 
 ```c#
-interface INamedPerson {
+interface INamedPerson
+{
   string Name { get; set; }
   int Year { get; }
 }
 
-class Person : INamedPerson {
+class Person : INamedPerson
+{
   private string _name;
 
-  public string Name {
+  public string Name
+  {
     get { return _name; }
-    set {
+    set
+    {
       if (value == null) throw new ArgumentNullException("value");
       _name = value;
     }
   }
 
-  public int Year {
+  public int Year
+  {
     get { return DateTime.Now.Year; }
   }
 }
@@ -148,8 +160,10 @@ No matter how hard I tried to structure further reasoning, it turned out that th
 There’s not much to discuss here — C# should never have allowed properties with only a `set` accessor:
 
 ```c#
-class Foo {
-  public int Property {
+class Foo
+{
+  public int Property
+  {
     set { SendToDeepSpace(value); }
   }
 }
@@ -181,7 +195,10 @@ person.set_Age(person.get_Age() + 1);
 It seems great that this works — after all, that’s what a high-level language is supposed to do: hide low-level implementation details, such as properties being method calls. The problem is that C# has another source of simultaneous read/write usage — `ref` parameters:
 
 ```c#
-void M(ref int x) { x += 42; }
+void M(ref int x)
+{
+  x += 42;
+}
 
 int x = 0;
 M(ref x); // read-write usage

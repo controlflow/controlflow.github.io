@@ -1,50 +1,56 @@
 ---
 layout: post
-title: "Design and evolution of properties in C# (part 1)"
+title: "Design and evolution of properties in C# (part 2)"
 date: 2015-04-08 17:53:00
 author: Aleksandr Shvedov
 tags: csharp properties design
 ---
 
-Продолжаем обсуждать проблемы и последствия дизайна свойств в языке программирования C# 1.0.
+Continuing the discussion on the issues and consequences of property design in the C# 1.0 programming language.
 
-### Пересечение с типами-значениями
+### Intersection with Value Types
 
-Существование типов-значений в языке очень усложняет практически все, что можно представить. Изменяемые типы-значения увеличивают сложность еще на порядок. Одна из причин усложнения языка - введение понятия адреса значения или lvalue (грубо говоря, выражения которое пишется слева от оператора присвоения).
+The existence of value types in the language significantly complicates almost everything else. Mutable value types increase the complexity even further. One of the reasons for this extra complexity in the language is the introduction of the concept of the values with an address or "lvalue" (roughly speaking, an expression that appears on the left side of the assignment operator).
 
-Одна из причин успеха языка программирования Java как раз в простоте языка из-за отсутствия ссылочных и указательных типов, программисту не приходится на практике сталкиваться с понятиями "lvalue" и "rvalue" из мира C/C++. В Java достаточно запомнить, что "адрес" ожидается только слева от знака присвоения и в качестве операнда мутирующих операторов типа `+=` и `++`. Во всех остальных местах языка оперируют только значениями (включая ссылки-на-объекты-как-значения).
+One reason for the success of the Java programming language lies in its simplicity due to the absence of reference and pointer types. In Java, the programmer doesn't have to deal with the concepts of "lvalue" and "rvalue" from C/C++. In Java, it is enough to remember that an "address" is only expected on the left side of the assignment operator and as an operand for mutating operators like `+=` and `++`. In all other parts of the language, only values are operated on (including references to objects treated as values).
 
-На первый взгляд, в C# помимо таких же присвоений и изменяющих значение операторов, адрес ожидается в качестве аргументов `out`-параметров, что не сильно усложняет картину. Однако, из-за того, что методы и другие члены уровня экземпляра, определенные на структурах, могут изменять эти самые структуры, во все такие члены структур в качестве `this` всегда передается адрес значения (как неявный `ref`-параметр, изменяемый!). То есть даже очень простой код вида `var d = dateTime.AddDays(1);` на самом деле использует переменную `dateTime` как адрес, а не значение, что совершенно незаметно.
+At first glance, in C#, besides such assignments and mutating operators, the address is expected as arguments to `out` parameters, which doesn't complicate the picture too much. However, due to the fact that methods and other instance-level members defined on structs can modify these structs, the address of the value is always passed as `this` to all such struct members (as an implicit `ref` parameter, which is mutable!). This means that even very simple code like `var d = dateTime.AddDays(1);` actually uses the `dateTime` variable as an address, not as a value, which is invisible for user.
 
-На такие случаи спецификация C# вводит понятие выражений, *классифицированных-как-переменная* (*classified as a variable*), чем-то похожее на понятие "lvalue". Однако с этим понятием сопряжено множество нюансов. Например, временные значения (типа возвращаемого значения вызова метода или обращения к свойству на чтение) и чтения `readonly`-полей (вне конструктора) *реклассифицируются* как переменные, чтобы на них все равно можно было вызывать члены структур (вызовы происходят на копии оригинального значения). Со всеми этими нюансами можно разобраться покурив поведение этого кода под отладчиком:
+For such cases, the C# specification introduces the concept of *expressions classified as variables*, which is somewhat similar to the concept of "lvalue." However, this concept comes with many nuances. For example, temporary values (such as the return value of a method call or reading a property) and reading `readonly` fields (outside of the constructor) are *reclassified* as variables so that struct members can still be called on them (calls happen on a copy of the original value). These nuances can be explored by examining the behavior of this code under a debugger:
 
 ```c#
-struct Box {
+struct Box
+{
   public int Value;
   public void Inc() { Value++; }
 }
 
-class Foo {
+class Foo
+{
   Box _f;
   readonly Box _r;
 
   Box _p;
-  Box P {
+  Box P
+  {
     get { return _p; }
     set { _p = value; } // never actually used
   }
 
-  public Foo() {
+  public Foo()
+  {
     _f.Inc(); // mutates '_f' field, classified as a variable
     _r.Inc(); // mutates '_r' readonly field, classified as a variable
     P.Inc(); // mutates temp value of 'P', reclassified as a variable
 
-    System.Action f = () => {
+    System.Action f = () =>
+    {
       _r.Inc(); // mutates temp copy of '_r', reclassified as a variable
     };
   }
 
-  public void InstanceMethod() {
+  public void InstanceMethod()
+  {
     _f.Inc(); // mutates '_f' field, classified as a variable
     _r.Inc(); // mutates temp copy of '_r', reclassified as a variable
     P.Inc(); // mutates temp value of 'P', reclassified as a variable
@@ -52,46 +58,59 @@ class Foo {
 }
 ```
 
-Таким образом свойства ведут себя наиболее простым способом, никогда не играя роль адреса значения. В итоге мы имеем в языке три немного отличающихся поведения для изменяемых полей, `readonly`-полей и свойств. При этом компилятор C# старается защитить нас от очевидных глупостей, запрещая на членах не классифицируемых как переменные (`readonly`-полях и свойствах) с типом типа-значения вызывать конструкции, явно нацеленные на модификацию значения:
+Thus, properties behave in the simplest way, never acting as an address of a value. As a result, the language has three slightly different behaviors for mutable fields, `readonly` fields, and properties. At the same time, the C# compiler tries to protect us from obvious mistakes by disallowing operations on members that are not classified as variables (e.g., `readonly` fields and properties) with value-type fields in a way that explicitly targets modifying the value:
 
 ```c#
-interface IBar {
+struct Box
+{
+  public int Value;
+}
+
+interface IBar
+{
   Box Box { get; set; }
 }
 
-void M(IBar bar) {
-  bar.Box.Value ++; // CS1612: Cannot modify the return value of 'IBar.Box'
-                    // because it is not a variable
+void M(IBar bar)
+{
+  // CS1612: Cannot modify the return value of 'IBar.Box'
+  //         because it is not a variable
+  bar.Box.Value++;
+
   bar.Box.Value = 42; // CS1612 too
-  bar.Box.Inc(); // ok! modifies temp 'Box' value
+
+  bar.Box.Inc(); // OK, but modifies temp 'Box' value
 }
 ```
 
-Но C# ничего не знает о поведении методов структур (изменяют-ли они значение), поэтому вынужден всегда разрешать их вызовы. На самом деле, C# мог бы попытаться устранить различия в поведении между изменяемыми полями и `get`/`set`-свойствами - в примере выше для того чтобы заставить `bar.Boo.Value++;` работать надо лишь вызвать `set`-аксессор `bar.Boo` и передать измененное выражением `.Value++` значение типа `Box` обратно в `bar`. Но с другой стороны, кажется, что в среднем по больнице разработчики никак не будут ожидать от выражения `bar.Box.Value++;` вызова `set`-аксессора свойства `bar.Box`, ведь все выражение выглядит как доступ на чтение и только `.Value` подвергается модификации.
+However, C# doesn't know about the behavior of struct methods (whether they modify the value or not)<sup>1</sup>, so it is forced to always allow their calls. In fact, C# could try to eliminate the differences in behavior between mutable fields and `get`/`set` properties. In the example above, in order to make `bar.Box.Value++;` work, one would only need to call the `set` accessor for `bar.Box` and pass the modified value (from the `.Value++` expression) of type `Box` back to `bar`. But on the other hand, it seems that developers generally wouldn't expect the `set` accessor of `bar.Box` to be called from an expression like `bar.Box.Value++`, since the whole expression looks like a read-access operation, with only `.Value` being modified.
 
-Стоит заметить, что всех описанных выше проблем и разницы в поведении можно легко избежать, если делать структуры C# неизменяемыми - тогда становится совершенно все равно, на копии значения или адресе что-то вызвали, все работало бы одинаково.
+It is worth noting that all the described problems and differences in behavior can be easily avoided if C# structs are made immutable — then it wouldn't matter whether something is called on a copy of the value or an address, as everything would work the same.
 
-### Типизация задержки
+### Classification of latency
 
-Одно из самых замечательных последствий существования свойств в C# — это "типизация" задержки. Под "задержкой" я подразумеваю среднее время возвращения исполнения после обращения к некоторому коду. Понятия "задержки" и связанное понятие "эффективности" (очень советую посмотреть [видео с Эриком Мейджером на эту тему](http://channel9.msdn.com/Blogs/Charles/Erik-Meijer-Latency-Native-Relativity-and-Energy-Efficient-Programming)) — практически точно такие же метрики программ, как "O большое" по времени или памяти.
+One of the most remarkable consequences of the existence of properties in C# is the classification of latency. By "latency," I mean the average time it takes for execution to return after calling a certain piece of code. The concepts of "latency" and the related concept of "efficiency" (I highly recommend watching [this video with Erik Meijer on the subject](http://channel9.msdn.com/Blogs/Charles/Erik-Meijer-Latency-Native-Relativity-and-Energy-Efficient-Programming)) are nearly the same metrics for programs as "big-O" for time or memory.
 
-Типизация занимается *классификацией* значений и других сущностей программы. Метрики вида "эта функция вычисляется за *O(n)*" или "эта функция пользуется константным количеством памяти" — вполне могут выступать в роли *типов* и их точно так же можно проверять на корректность (например, запретить вызывать функции, класифицированных как *O(n<sup>2</sup>)*, из *O(n)*-функций). Спроса на такую разновидность типизации я не наблюдал, так же как и языков программирования, способных выразить и валидировать подобные аспекты программ.
+Typing is concerned with the *classification* of values and other entities in a program. Metrics like "this function runs in *O(n)*" or "this function uses a constant amount of memory" can easily serve as *types*, and they can be checked for correctness in the same way (for example, prohibiting the calling of functions classified as *O(n<sup>2</sup>)* from within *O(n)* functions). I have not seen a demand for this kind of typing, nor have I come across programming languages that can express and validate such aspects of programs.
 
-С другой стороны, в реальной жизни мы на самом деле часто сталкиваемся с попытками классифицирования понятия задержки того или иного метода некоторого API. Самый распространенный пример — Promise-объекты. Например, в WinRT (новом провальном системном API приложений для Windows 8) все методы, которые могут исполняться достаточно долго, сделаны только возвращающими значения типов `Task` или `Task<T>`. Все их использования вынуждают пользователя породить асинхронность и быть готовым к задержке (не забивать UI-поток в ожидании окончания тяжелых операций), потому что из `Task<T>` нет легкого способа вытащить значение `T` (за `.Value` или `.Wait()` можно сразу убивать). То есть сущности программы разделяются хотя бы на два класса — пригодные для синхронных вызовов и пригодных только для работы в асинхронном коде.
+On the other hand, in real life, we often encounter attempts to classify the concept of latency for a particular method in some API. The most common example is Promise objects. For instance, in WinRT (the new, failed system API for Windows 8 applications), all methods that can take a long time to execute return values of type `Task` or `Task<T>`. Using them forces the developer to handle asynchrony and be prepared for latency (not blocking the UI thread while waiting for heavy operations to complete), because extracting the value `T` from a `Task<T>` is not straightforward (using `.Value` or `.Wait()` can immediately cause problems). So, the program's entities are divided into at least two classes — those that are suitable for synchronous calls and those that are only suitable for asynchronous code.
 
-Свойства в C# — тоже, в некотором роде, типизируют задержку исполняемого кода. От свойства обычно никак не не ожидают, что при доступе оно полезет на диск или в сеть. Это правило конечно же неформальное, никто это не проверяет, существуют известные отклонения (например, свойство `Lazy<T>.Value`), но все же на практике API из методов и свойств позволяет иметь некоторые ожидания от того или иного члена класса в плане "задержки".
+Properties in C# also, in a sense, classify the latency of the code. Typically, no one expects that accessing a property will involve disk or network operations. This rule is informal, of course, no one enforces it, and there are known exceptions (such as the `Lazy<T>.Value` property), but in practice, the API consisting of methods and properties allows certain expectations regarding the "latency" of a class member.
 
-### Типизация функциональной чистоты
+### Classification of purity
 
-Другой не менее важный аспект свойств — опять же неформально, но большинством C# разработчиков ожидается, что доступ к свойству на чтение функционально чист. Формальное определение чистоты достаточно сложно дать применительно к C#/.NET, поэтому я буду оперировать какой-нибудь абстрактной чистотой. Здравый смысл позволяет ожидать, что доступ к свойству на чтение не может изменить видимое клиенту состояние класса (то есть вычислить что-то и закэшировать в приватном изменяемом поле — ОК, вполне себе чисто), не делает I/O или запроса к СУБД.
+Another equally important aspect of properties is that, again informally, most C# developers expect that reading a property should be functionally pure. Formally defining purity in the context of C#/.NET is quite difficult, so I will rely on an abstract concept of purity. Common sense suggests that reading a property should not modify the visible client state of the class (i.e., it’s fine to compute something and cache it in a private mutable field—this is still pure), nor should it perform I/O or query a database.
 
-Чистота свойств настолько натуральна и ожидаема, что отладчик VisualStudio не брезгает вызывать любые свойства в окнах отладчика типа Watch — это очень удобно и в 99.99% случаев не имеет никакого эффекта на исполнение программы под отладчиком. Помимо отладчика, IDE-тулингу типа ReSharper для автоматических рефакторингов кода иногда крайне полезно уметь спросить любое выражение языка "а чистый-ли ты, дружок?" — например, чтобы переупорядочить код изменяя порядок вычисления, но сохраняя семантику исходной программы. Конкретно в ReSharper некоторые рефакторинги полагаются на чистоту доступа к свойству (даже не смотря на очевидные отклонения как `System.DateTime.Now`) и жалоб на сломанную семантику программы (после применения рефакторинга) практически никогда не поступало.
+The purity of properties is so natural and expected that the Visual Studio debugger doesn't hesitate to call any property in debugging windows like Watch—this is very convenient, and in 99.99% of cases, it doesn't affect the program's execution while debugging. Apart from the debugger, IDE tooling like ReSharper for automated code refactorings can be extremely useful for checking whether an expression is "pure," for example, to reorder code while maintaining the program's original semantics. Specifically, in ReSharper, some refactorings rely on the purity of property access (even considering obvious exceptions like `System.DateTime.Now`), and complaints about broken semantics after applying the refactorings rarely arise.
 
 ```c#
-if (foo.Bar != null) foo.Bar.Baz();
+if (foo.Bar != null)
+{
+  foo.Bar.Baz();
+}
 ```
 
-Код выше *очень распространен* в C#, из-за этого в движке dataflow-анализов ReSharper когда-то давно пришлось поддерживать не только локальные переменные, но еще и собирать знания о значениях полей и свойств, к которым достучались из локальных переменных (как `foo.Bar` из примера выше). При этом такой анализ не является sound (результаты не всегда корректны), он не учитывает потенциальный aliasing ссылок на объекты, панически инвалидирует знания о свойствах/полях при вызовах методов на той или иной переменной (вызовы типа `foo.M()` инвалидируют знания о членах типа `foo.Bar`). Но что поделаешь, если такой код пишут регулярно, отдача от анализа должна быть практически мгновенной и >95% свойств действительно являются чистыми функциями при чтении?
+The code above is *very common* in C#, which is why, in the dataflow analysis engine of ReSharper, it was once necessary to support not only local variables but also gather knowledge about the values of fields and properties accessed from local variables (like `foo.Bar` in the example above). However, such analysis is not sound (the results are not always correct), as it does not account for potential aliasing of object references, and not very precise — it invalidates knowledge of properties/fields when methods are called on variables (calls like `foo.M()` invalidate knowledge of the members of `foo.Bar`). But what can you do when this code is written regularly, and the feedback from the analysis needs to be nearly instantaneous, with >95% of properties actually being pure functions when read?
 
 ### Модификаторы свойств и полиморфизм
 
@@ -230,7 +249,7 @@ class Person {
 
 
 
-[Продолжение следует...]({% post_url 2015-04-08-csharp-properties-part3 %})
+[To be continued...]({% post_url 2015-04-08-csharp-properties-part3 %})
 
-
+<sup>1</sup> This was relaxed in future C# versions, by allowing `readonly` modifier on declaration of struct's instance members to indicate their immutability and to get rid of shallow copies.
 
