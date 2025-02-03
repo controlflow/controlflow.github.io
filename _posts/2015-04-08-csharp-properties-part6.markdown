@@ -69,38 +69,47 @@ class C : A {
 Нововведения C# 6.0 у меня вызывали сначала только положительные эмоции, так как наконец адресавали известные проблемные места языка. Например, понимаешь, что вокруг языка просто исчезнут разные бесполезные споры как форматировать тривиальные свойства (правда, могут начаться споры использовать ли вообще свойства с телами-выражениями):
 
 ```c#
-class C : B {
-  public override bool CanRead {
-    get {
-      return true;
+class C : B
+{
+    public override bool CanRead
+    {
+        get
+        {
+            return true;
+        }
     }
-  }
-  // vs.
-  public override bool CanRead {
-    get { return true; }
-  }
-  // vs.
-  public override bool CanRead { get { return true; } }
-  // vs.
-  public override bool CanRead => true;
+
+    // vs.
+    public override bool CanRead
+    {
+        get { return true; }
+    }
+
+    // vs.
+    public override bool CanRead { get { return true; } }
+
+    // vs.
+    public override bool CanRead => true;
 }
 ```
 
 Разобравшись немного получше, задумываешсья что синтаксис тел-выражений не позволит (или как минимум затруднит) в будущем ввести какие-нибудь новые модификаторы на аксессорах, но таких пока не приходит в голову (может быть какой-нибудь `lazy`?). Задумавшись еще глубже, становится страшно представлять как придется объяснять новичку в C# в чем разница между двумя языковыми конструкциями, различающиеся буквально одним символом:
 
 ```c#
-class C {
-  public int Field = 42;
-  public int Property => 42;
+class C
+{
+    public int Field = 42;
+    public int Property => 42;
 }
 ```
 
 Почему после `=` выражение находится в статическом контексте и вычисляется при инициализации класса, а выражение после `=>` вычисляется каждый раз и позволяет пользоваться `this`? Синтаксис тел-выражений смазывает различие между совершенно разными конструкциями, предназначенными для разных целей, только с опытом программирования на C# вырабатывается, в некотором роде, ожидание от конструкции с токеном `=>` как от чего-то вычисляемого. Еще одна проблема, общая с синтаксисом тел лямбда-выражений - невозможность выбросить исключение в теле-выражении:
 
 ```c#
-class C {
-  public int Property =>
-    throw new NotImplementedException(); // unexpected 'throw' token
+class C
+{
+    public int Property =>
+        throw new NotImplementedException(); // unexpected 'throw' token
 }
 ```
 
@@ -111,9 +120,10 @@ class C {
 Второй вкусностью, привнесенной C# 6.0 является синтаксис инициализаторов авто-свойств, полностью экивалентный синтаксису инициализаторов полей и field-like событий (в ходе разработки C# 6.0 чуть не упустили инициализаторы массивов, редко используемые на практике, но важные с точки зрения симметрии с объявлениями полей/событий):
 
 ```c#
-class Person {
-  public string Name { get; set; } = string.Empty;
-  public int[] Array { get; set; } = { 1, 2, 3 }; // array initializer
+class Person
+{
+    public string Name { get; set; } = string.Empty;
+    public int[] Array { get; set; } = { 1, 2, 3 }; // array initializer
 }
 ```
 
@@ -124,14 +134,17 @@ class Person {
 Что касается семантики, то инициализаторы авто-свойств работают аналогично инициализаторам полей - инициализация случается до вызова тела конструктора (включая вызов базового конструктора). Из этого следует простое правило пересечения с полиморфизмом - инициализатор записывает значение в поле авто-свойства, минуя `set`-аксессор (потенциально виртуальный), иначе это привело бы к виртуальным вызовам до вызова конструктора производного класса.
 
 ```c#
-class Base {
-  public virtual string Text { get; set; } = string.Empty;
+class Base
+{
+    public virtual string Text { get; set; } = string.Empty;
 }
 
-class Derived : Base {
-  public override string Text {
-    set { throw new InvalidOperationException("Do not mutate me!"); }
-  }
+class Derived : Base
+{
+    public override string Text
+    {
+        set { throw new InvalidOperationException("Do not mutate me!"); }
+    }
 }
 
 var derived = new Derived(); // ok
@@ -141,12 +154,14 @@ Assert.AreEqual(derived.Text, string.Empty); // ok
 Из-за появления неполиморфного доступа к полиморфному члену с состоянием, мы наследуем и часть проблем виртуальных field-like событий. Например, инициализированное авто-свойство могут полностью переопределить и состояние авто-свойства (пустой список из примера ниже) станет недостежимым, даже внутри объявления класса `Base`:
 
 ```c#
-class Base {
-  public virtual List<T> Items { get; set; } = new List<T>();
+class Base
+{
+    public virtual List<T> Items { get; set; } = new List<T>();
 }
 
-class Derived : Base {
-  public override List<T> Items { get { ... } set { ... } }
+class Derived : Base
+{
+    public override List<T> Items { get { /*...*/ } set { /*...*/ } }
 }
 ```
 
@@ -155,11 +170,12 @@ class Derived : Base {
 Порядок инициализации авто-свойств тоже эквивалентен правилам полей - инициализаторы вычисляются в порядке объявления соответствующих авто-свойств, а порядок инициализации между частами `partial`-типов не определен. Это становится важно в объявлениях статических свойств, так как в статике иногда встречаются зависимости между инициализированными членами. Из спецификации не понятен лишь порядок в инициализации *разных* членов классов, однако компилятор ведет себя наиболее предсказуемым образом (иициализаторы исполняются в порядке объявлений, независимо от разновидности члена типа):
 
 ```c#
-class C {
-  public static readonly int Field = EvaluatedFirst();
-  public static int AutoProperty1 { get; set; } = EvaluatedSecond();
-  public static int AutoProperty2 { get; set; } = EvaluatedThird();
-  public static event EventHandler Event = EvaluatedFourth();
+class C
+{
+    public static readonly int Field = EvaluatedFirst();
+    public static int AutoProperty1 { get; set; } = EvaluatedSecond();
+    public static int AutoProperty2 { get; set; } = EvaluatedThird();
+    public static event EventHandler Event = EvaluatedFourth();
 }
 ```
 
@@ -170,15 +186,17 @@ TODO: нарушили симметрию аксессоров
 Следующим позитивным изменением C# 6.0, относящемуся к объявлениям свойств, стала возможность опускать объявление `set`-аксессора авто-свойств, тем самым делая их "по-настоящему" неизменяемыми. Это изменением наделяет бОльшим смыслом инициализаторы на объявлениях свойств, позволяя "натурально" инициализровать такие авто-свойства только для чтения:
 
 ```c#
-class Person {
-  public string Name { get; }
-  public int Age { get; }
+class Person
+{
+    public string Name { get; }
+    public int Age { get; }
 
-  public List<Item> Items { get; } = new List<Item>();
+    public List<Item> Items { get; } = new List<Item>();
 
-  public Person(string name) {
-    this.Name = name;
-  }
+    public Person(string name)
+    {
+        this.Name = name;
+    }
 }
 ```
 
@@ -189,66 +207,76 @@ class Person {
 Возвращаясь к хорошим сторонам авто-свойств для чтения, возможность опустить `set`-аксессор позволяет нам использовать авто-свойства для переопределений свойств с единственным `get`-аксессором, что просто не было возможно раньше:
 
 ```c#
-abstract class A {
-  public abstract int ReadOnly { get; }
+abstract class A
+{
+    public abstract int ReadOnly { get; }
 }
 
-class C : A {
-  public override int ReadOnly { get; } // ok
+class C : A
+{
+    public override int ReadOnly { get; } // OK
 }
 ```
 
 Более того, специально только для таких виртуальных авто-свойств только для чтения запретили переопределение, если в базовом свойстве был еще и `set`-аксессор, введя в C# 6.0 новую ошибку компиляции. Это несколько нарушает симметрию с обычными свойствами, который без проблем позволяют такое переопределение, но вроде как сделано из добрых побуждений:
 
 ```c#
-abstract class A {
-  public abstract int MutableProperty { get; set; }
+abstract class A
+{
+    public abstract int MutableProperty { get; set; }
 }
 
-class C : A {
-  // CS8080: Auto-implemented properties must override
-  //         all accessors of the overridden property
-  public override int MutableProperty { get; }
+class C : A
+{
+    // CS8080: Auto-implemented properties must override
+    //         all accessors of the overridden property
+    public override int MutableProperty { get; }
 }
 ```
 
 Так как присвоение авто-свойству для чтения на самом деле компилируется, очевидно, напрямую в присвоение полю авто-свойства, то интересной особенностью начинает обладать доступ на *чтение/запись*, иногда становясь "наполовину полиморфным":
 
 ```c#
-class C {
-  public virtual int GetOnlyAutoProp { get; }
+class C
+{
+    public virtual int GetOnlyAutoProp { get; }
     
-  public C() {
-    this.GetOnlyAutoProp += 42;
-    // compiled into:
-    this.<GetOnlyAutoProp>k__BackingField = this.GetOnlyAutoProp + 42;
-  }
+    public C()
+    {
+        this.GetOnlyAutoProp += 42;
+        // compiled into:
+        this.<GetOnlyAutoProp>k__BackingField = this.GetOnlyAutoProp + 42;
+    }
 }
 ```
 
 Из негативных сторон дизайна авто-свойств только для чтения так же стоит отметить отсутствие всяких предупреждений компилятора в случае отсутствия присвоения таким авто-свойствам в конструкторах (аналогичных предпреждениям компилятора для `readonly` полей) или инициациализатором. Я не могу объяснить отсутствие подобного предупреждения, разве только желанием подбросить работы разработчикам IDE-инструментария.
 
 ```c#
-class C {
-  public int LostState { get; } // compiler: OK
-                                // resharper: Unassigned get-only auto-property
+class C
+{
+    public int LostState { get; } // compiler: OK
+                                  // ReSharper: Unassigned get-only auto-property
 }
 ```
 
 Еще одним минусом является плохое пересечение с типами-значениям: доступ к авто-свойству-только-для-чтения внутри конструктора не классифицируется как *переменная* (в отличие от `readonly`-полей), что запрещает доступ на *частичную запись* таких авто-свойств:
 
 ```c#
-public struct Point {
-  public int X, Y;
+public struct Point
+{
+    public int X, Y;
 }
 
-public class C {
-  public Point Origin { get; }
+public class C
+{
+    public Point Origin { get; }
 
-  public C() {
-    Origin.X = 1; // CS1612: Cannot modify the return value of 'C.Origin'
-    Origin.Y = 2; //         because it is not a variable
-  }
+    public C()
+    {
+        Origin.X = 1; // CS1612: Cannot modify the return value of 'C.Origin'
+        Origin.Y = 2; //         because it is not a variable
+    }
 }
 ```
 
@@ -257,14 +285,16 @@ public class C {
 Ну и последним позитивным изменением авто-свойств стал просто-напросто "захаканный" анализ инициализации структуры. Выше было упомянуто, что присвоении авто-свойству только для чтения на самом деле "означает" присвоение его полю, поэтому такие авто-свойства изначально бы не создавали проблем внутри структур (инициализация авто-свойства не считалась бы доступом к `this` структуры до инициализации всех ее полей):
 
 ```C#
-struct Point {
-  public int X { get; }
-  public int Y { get; }
+struct Point
+{
+    public int X { get; }
+    public int Y { get; }
     
-  public Point(int x, int y) {
-    this.X = x; // OK
-    this.Y = y;
-  }
+    public Point(int x, int y)
+    {
+      this.X = x; // OK
+      this.Y = y;
+    }
 }
 ```
 
@@ -291,26 +321,29 @@ struct TwoPoints {
 * TODO: стало сложнее отличать стейт от не-стейта
 
 ```c#
-class StateOrNot {
-  int P { get; }
-  int P { get; } = e;
-  int P { get; set; }
-  int P { get; set; } = e;
-  int P { get { ... } }
-  int P { get { ... } set { ... } }
-  int P => e;
+class StateOrNot
+{
+    int P { get; }
+    int P { get; } = e;
+    int P { get; set; }
+    int P { get; set; } = e;
+    int P { get { ... } }
+    int P { get { ... } set { ... } }
+    int P => e;
 }
 ```
 
 * TODO: get-only auto-property explicit implementation + невозможность инициализировать
 
 ```c#
-class C : IFoo {
-  int IFoo.Property { get; } // get-only auto-property
+class C : IFoo
+{
+    int IFoo.Property { get; } // get-only auto-property
 
-  public C(int number) {
-    ((IFoo) this).Property = number; // error
-  }
+    public C(int number)
+    {
+        ((IFoo) this).Property = number; // error
+    }
 }
 ```
 
