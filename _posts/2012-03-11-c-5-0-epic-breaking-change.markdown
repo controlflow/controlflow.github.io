@@ -5,7 +5,7 @@ date: 2012-03-11 16:29:00
 author: Aleksandr Shvedov
 tags: csharp vs11 breaking change closure capture
 ---
-Да, это случилось. В последней версии компилятора C# из состава Visual Studio “11” Beta изменилось правило разворачивания компилятором цикла `foreach`:
+Yes, it finally happened. The latest C# compiler, shipped with Visual Studio "11" Beta, has changed the way it expands a `foreach` loop:
 
 ```c#
 foreach (T x in xs) {
@@ -13,7 +13,7 @@ foreach (T x in xs) {
 }
 ```
 
-Цикл `foreach` - достаточно нетривиальная конструкция и имеет множество нюансов, я привожу лишь самый обычный случай, когда `xs` является переменной типа `IEnumerable<T>`. Раньше такой цикл компилировался прибилизительно следующим образом:
+The `foreach` loop is a surprisingly involved construct with plenty of subtleties. Here I'm only showing the most common case, where `xs` is a variable of type `IEnumerable<T>`. Previously, the compiler would translate this loop into roughly the following:
 
 ```c#
 {
@@ -31,7 +31,7 @@ foreach (T x in xs) {
 }
 ```
 
-Теперь компилируется вот так:
+Now it produces this instead:
 
 ```c#
 {
@@ -48,9 +48,9 @@ foreach (T x in xs) {
 }
 ```
 
-То есть декларация переменной итерации уехала внутрь цикла `while` и это оказывает влияние на то, как теперь происходит замыкание на переменную итерации `foreach`. Так как замыкание в C# происходит *по ссылке* (замыкание на сами переменные, а не на их значения), то все анонимные методы и лямбда-выражения замыкаются на одну и ту же переменную и если их исполнение будет отложено за пределы цикла, то они “увидят” в переменной значение на момент последней итерации цикла, а не на момент создания анонимного метода/лямбда-выражения. Не смотря на то, что поведение чётко описано в спецификации и в некотором роде имеет право на существование, среднестатический юзер C# всё-же упёрто ожидает, что на каждой итерации цикла будет замыкаться на *"fresh variable"*. Ходят шутки, что изменение этого поведение убрало бы на StackOverflow добрую треть вопросов по C#.
+In other words, the iteration variable declaration has moved inside the `while` loop, which changes how closures capture the `foreach` iteration variable. C# closures capture *by reference*: they capture variables themselves, not their values. Under the old rules, all anonymous methods and lambda expressions created in the loop captured the same variable. If they were invoked after the loop had finished, they would "see" its value from the final iteration, rather than the value it held when each anonymous method or lambda expression was created. Although this behavior was clearly defined in the specification and had some justification, the average C# user still stubbornly expected each iteration to capture a *fresh variable*. There's a running joke that changing this behavior would eliminate a good third of all C# questions on Stack Overflow.
 
-Видимо, юзеры настолько задолбали C# team, что те решились на такой достаточно серьёзный breaking change. Однако факт остаётся фактом, теперь этот код:
+Apparently, users had worn the C# team down enough for them to go ahead with a fairly major breaking change. Whatever the reason, consider this code:
 
 ```c#
 using System;
@@ -71,7 +71,7 @@ static class Program {
 }
 ```
 
-Выводит на экран ожидаемые:
+It now prints what you would expect:
 
 ```
 1
@@ -79,6 +79,6 @@ static class Program {
 3
 ```
 
-Думаю, что решающим был тот факт, что сложно придумать пример, в котором предыдущее поведение было бы осмысленным в случае отложенного исполнения замыкания - в 99% случаях такие замыкания просто являются ошибками. Будем надеяться, что с таким изменением язык C# станет более логичным для пользователя, а скрытые ошибки, связанные с замыканием на переменную итерации `foreach`, сами пофиксятся, когда проекты будут собирать компилятором C# версии 5.0.
+I think the deciding factor was how hard it is to come up with an example where the old behavior makes sense when a closure is invoked after the loop. In 99% of cases, these closures are simply bugs. Hopefully, this change will make C# more intuitive, and lurking bugs caused by capturing the `foreach` iteration variable will fix themselves when projects are rebuilt with the C# 5.0 compiler.
 
-p.s. Эти изменения никак не затрагивают цикл `for`, в котором присутствует подобная проблема, так как цикл `for` на самом деле совсем не связан с переменными, которые могут определять (а могут и не определять) в части инициализации цикла.
+P.S. This change does not affect the `for` loop, which has a similar problem: a `for` loop isn't inherently tied to the variables that may (or may not) be declared in its initializer.
