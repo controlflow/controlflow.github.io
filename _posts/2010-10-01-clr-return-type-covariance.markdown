@@ -1,11 +1,11 @@
 ---
 layout: post
-title: "CLR и return type covariance"
+title: "The CLR and Return Type Covariance"
 date: 2010-10-01 13:25:31
 author: Aleksandr Shvedov
 tags: csharp covariance override
 ---
-До сегоднешнего дня я почему-то был уверен, что runtime CLR поддерживает ковариантность типа возвращаемого значения при переопределении виртуальных методов, просто в C# эту мелоч никак не засунут… Оказалось, что нет, не поддерживает и требует точного совпадения типов, пруф:
+Until today, for some reason, I was convinced that the CLR supported return type covariance when overriding virtual methods, and that C# just hadn't gotten around to adding this little feature... Turns out the .NET Framework runtime doesn't support it either: the return types have to match exactly. Here's the proof:
 
 ```c#
 using System;
@@ -16,7 +16,7 @@ public abstract class Foo {
   public abstract Foo Bar();
 
   static void Main() {
-    // создаём динамическую сборочку с модулем
+    // create a dynamic assembly with a module
     var dynAssembly = AppDomain.CurrentDomain
       .DefineDynamicAssembly(
         name: new AssemblyName("FooAssembly"),
@@ -24,35 +24,47 @@ public abstract class Foo {
 
     var dynModule = dynAssembly.DefineDynamicModule("FooModule");
 
-    // создаёт тип наследника Foo
+    // define a type derived from Foo
     var dynType = dynModule.DefineType(
       "FooDerived", TypeAttributes.Public, typeof(Foo));
 
-    // генерим дефолтный конструктор
+    // generate a default constructor
     dynType.DefineDefaultConstructor(MethodAttributes.Public);
 
-    // генерим override-метод
+    // generate an overriding method
     var method = dynType.DefineMethod("Bar",
       MethodAttributes.Public | MethodAttributes.Virtual,
       CallingConventions.Standard, dynType, Type.EmptyTypes);
 
-    // генерируем тело { return this; }
+    // emit the body { return this; }
     var il = method.GetILGenerator();
     il.Emit(OpCodes.Ldarg_0);
     il.Emit(OpCodes.Ret);
 
-    // объявляем переопределение
+    // declare the override
     dynType.DefineMethodOverride(
       method, typeof(Foo).GetMethod("Bar"));
 
-    // компилим тип и создаём экземпляр
+    // create the type and instantiate it
     var derivedType = dynType.CreateType(); // FUUUUUUUUUUUU
     var foo = (Foo) Activator.CreateInstance(derivedType);
 
-    // вызываем
+    // call the method
     Console.WriteLine(foo.Bar());
   }
 }
 ```
 
-Зато `Delegate.CreateDelegate()` поддерживает и коваринтность типа возвращаемого значения, и контравариантность типов параметров при создании делегатов из экземпляров `MethodInfo`. Причём аннотации вариантности на типе делегата совершенно не нужны, работает и в 2.0. Думаю поддержку сделали чтобы `Delegate.CreateDelegate()` повторял в рантайме статическое поведение C#, который поддерживает ко-/контравариантность при приведении method group к типу делегата :))
+On the other hand, `Delegate.CreateDelegate()` supports both return type covariance and parameter type contravariance when creating delegates from `MethodInfo` instances. No variance annotations on the delegate type are needed, and this even works in .NET Framework 2.0. I suspect this was added so that `Delegate.CreateDelegate()` would reproduce at runtime what C# already does at compile time: support for covariance and contravariance when converting a method group to a delegate type:
+
+```c#
+using System;
+
+// expected `object Method(string)`
+// got `string Method(object)`
+Func<string, object> func = Method; // compiles fine!
+
+string Method(object arg) { return arg.ToString(); }
+```
+
+p.s. Covariant return type overrides later appeared in C# 9.0 and .NET 5 runtime, 11 years later after this post was published.

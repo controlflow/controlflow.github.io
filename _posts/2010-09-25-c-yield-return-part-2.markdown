@@ -5,13 +5,13 @@ date: 2010-09-25 22:19:25
 author: Aleksandr Shvedov
 tags: csharp yield enumerable
 ---
-Допустим есть метод-итератор:
+Suppose we have an iterator method:
 
 ```c#
 static IEnumerable Bar() { yield break; }
 ```
 
-Попробуем вызвать его и поковырять возвращённый `IEnumerable`-объект:
+Let's call it and poke around in the `IEnumerable` object it returns:
 
 ```c#
 var x = Bar();
@@ -19,7 +19,7 @@ Console.WriteLine(x == x.GetEnumerator()); // true
 Console.WriteLine(x == x.GetEnumerator()); // false
 ```
 
-Интересный эффект (оператор == тут действует как проверка ссылочной эквивалентности)… Дело тут в том, что в C# генерирует для итератора всего один класс, который реализует и интерфейс `IEnumerable`, и `IEnumerator`. При этом по вызову `GetEnumerator()` он должен фактически вернуть себя самого, что и происходит в первом вызове. Однако на следующие вызовы переиспользовать самого себя как `IEnumerator` класс уже не может, поэтому создаёт и возвращает свою копию. Однако это не все эффекты:
+An interesting effect (`==` checks reference equality here)... The C# compiler generates just one class for the iterator, implementing both `IEnumerable` and `IEnumerator`. On the first call to `GetEnumerator()`, it can return itself, which explains the first result. On subsequent calls, though, it can no longer reuse itself as an `IEnumerator`, so it creates and returns a new instance of the same class. But that's not the only interesting effect:
 
 ```c#
 var y = Bar();
@@ -32,8 +32,8 @@ t.Start();
 t.Join();
 ```
 
-То есть при вызове из потока, отличного от того, в котором экземпляр `IEnumerable` был получен вызовом метода-итератора, создаётся новый экземпляр. Это сделано во избежании ситуации, когда несколько потоков могут обратиться к “свежему” `IEnumerable` одновременно и разделить между собой один и тот же `IEnumerator`.
+So when `GetEnumerator()` is called from a thread other than the one that obtained the `IEnumerable` instance by calling the iterator method, it creates a new instance. This prevents multiple threads from accessing a "fresh" `IEnumerable` at the same time and ending up with the same `IEnumerator`.
 
-Кстати, если бы метод-итератор возвращал `IEnumerator`, то никаких подобных проверок и переиспользований компилятор C# не генерировал бы.
+By the way, if the iterator method returned `IEnumerator`, the C# compiler wouldn't generate any of these checks or any code for reusing the instance.
 
-Подробное описание всех implementation details итераторов можно посмотреть в reflector’е или почитать [здесь](http://csharpindepth.com/Articles/Chapter6/IteratorBlockImplementation.aspx).
+You can explore all the iterator implementation details in Reflector, or read a detailed explanation [here](http://csharpindepth.com/Articles/Chapter6/IteratorBlockImplementation.aspx).
