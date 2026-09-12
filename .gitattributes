@@ -1,0 +1,2 @@
+# Bundler frozen installs require LF line endings in the lockfile.
+Gemfile.lock text eol=lf

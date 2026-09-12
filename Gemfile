@@ -1,4 +1,11 @@
-source 'https://rubygems.org'
-gem 'github-pages'
-gem "webrick", "~> 1.7"
-gem "wdm", ">= 0.1.0", platforms: [:mingw, :x64_mingw, :mswin]
+source "https://rubygems.org"
+
+ruby ">= 3.3"
+
+gem "jekyll", "~> 4.4"
+gem "webrick", "~> 1.9"
+gem "wdm", "~> 0.2", platforms: :windows
+
+group :development do
+  gem "bundler-audit", "~> 0.9", require: false
+end

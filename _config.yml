@@ -12,3 +12,11 @@ highlighter: rouge
 kramdown:
   math_engine: mathjax
   syntax_highlighter: rouge
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - serve.cmd
+  - serve.ps1
+  - vendor

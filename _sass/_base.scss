@@ -1,3 +1,6 @@
+@use "settings" as *;
+@use "sass:color";
+
 body, h1, h2, h3, h4, h5, h6,
 p, blockquote, pre, hr,
 dl, dd, ol, ul, figure {
@@ -75,7 +78,7 @@ a {
     text-decoration: none;
 
     &:visited {
-        color: darken($brand-color, 15%);
+        color: color.adjust($brand-color, $lightness: -15%);
     }
 
     &:hover {
@@ -95,7 +98,7 @@ div.highlight {
 blockquote {
     color: $grey-color;
     border-left: 4px solid $grey-color-light;
-    padding-left: $spacing-unit / 2;
+    padding-left: $spacing-unit * 0.5;
     margin-left: 1.5em;
     margin-right: 1.5em;
 
@@ -175,8 +178,8 @@ pre {
     @include media-query($on-laptop) {
         max-width: -webkit-calc(800px - (#{$spacing-unit}));
         max-width:         calc(800px - (#{$spacing-unit}));
-        padding-right: $spacing-unit / 2;
-        padding-left: $spacing-unit / 2;
+        padding-right: $spacing-unit * 0.5;
+        padding-left: $spacing-unit * 0.5;
     }
 }
 
