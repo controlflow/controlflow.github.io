@@ -1,0 +1,33 @@
+@use "sass:color";
+
+// Our variables
+$base-font-family: Verdana, Geneva, sans-serif;
+$base-font-size:   16px;
+$small-font-size:  $base-font-size * 0.875;
+$base-line-height: 1.4;
+
+$spacing-unit:     30px;
+
+$text-color:       #111;
+$background-color: #fdfdfd;
+$brand-color:      #6060B0;
+
+$grey-color:       #828282;
+$grey-color-light: color.adjust($grey-color, $lightness: 40%);
+$grey-color-dark:  color.adjust($grey-color, $lightness: -25%);
+
+$on-palm:          600px;
+$on-laptop:        800px;
+
+// Using media queries with like this:
+// @include media-query($palm) {
+//     .wrapper {
+//         padding-right: $spacing-unit * 0.5;
+//         padding-left: $spacing-unit * 0.5;
+//     }
+// }
+@mixin media-query($device) {
+    @media screen and (max-width: $device) {
+        @content;
+    }
+}
