@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Types and Programming Languages». Benjamin C. Pierce"
+title: "«Types and Programming Languages». Benjamin C. Pierce"
 date: 2016-09-04 10:00:00
 author: Aleksandr Shvedov
 tags: tapl typesystems types
