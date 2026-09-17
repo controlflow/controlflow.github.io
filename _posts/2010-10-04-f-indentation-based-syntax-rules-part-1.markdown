@@ -1,11 +1,11 @@
 ---
 layout: post
-title: "F# indentation-based syntax rules (part 1)"
+title: "F# indentation-based syntax rules"
 date: 2010-10-04 13:11:00
 author: Aleksandr Shvedov
 tags: fsharp syntax
 ---
-Хочется описать пару занятных особенностей синтаксиса F#, построенного на отступах, о которых не все могут знать. Не смотря на то, что обычно блоки должны располагаться на одном уровне отступа, из этого правила есть исключения:
+I'd like to point out a couple of curious features of F#'s indentation-based syntax that you may not have come across. Blocks usually have to maintain a consistent indentation level, but there are exceptions:
 
 ```fsharp
 let x =
@@ -16,10 +16,10 @@ let x =
     / 55.5
 ```
 
-Инфиксные операторы (на самом деле любые инфиксные *токены*) могут располагаться слева от общего уровня отступа блока, причём левее ровно на количество символов записи оператора, увеличенное на единицу (то есть после оператора допустим только один пробел). Это иногда может позволять лучше вырванивать код, состоящий из кучи применений оператора `(|>)`, например:
+Infix operators (in fact, any infix *tokens*) can appear to the left of a block's indentation level, by exactly the length of the operator plus one character. In other words, only a single space is allowed after the operator. This can sometimes help line up code that uses lots of `(|>)` operators, for example:
 
 ```fsharp
-// функция, не делающая ничего вразумительного
+// a function that doesn't do anything particularly useful
 let someFunction count =
 
       let someSequnce = { 0 .. count }
@@ -31,17 +31,17 @@ let someFunction count =
       | [ 10; 11; x ] when x > 11 -> true
       | _                         -> false
 
-   |> printfn "Ответ: %b"
+   |> printfn "Answer: %b"
 ```
 
-Существует так же исключение для `and` в `let rec`-биндингах:
+There's also an exception for `and` in `let rec` bindings:
 
 ```fsharp
 let rec xs = { 0 .. 100 }
 and ys = { 0 .. 200 }
 ```
 
-Здесь `and` может быть выровнен на одном уровне с `let` и это не будет считаться ошибкой. Внутри определений типов аналогичным поведением обладают токены `|`, `}`, `end` и `and`:
+Here, `and` can line up with `let` without causing an error. Within type definitions, the tokens `|`, `}`, `end`, and `and` behave similarly:
 
 ```fsharp
 type Foo =
@@ -49,13 +49,13 @@ type Foo =
 | CaseB
 | CaseC
 
-and // ok
+and // OK
     Bar(x : int) = class
 
     member baz.M() = ()
 
-end // ok
+end // OK
 
 type Baz = { x : int
-} // ok
+} // OK
 ```
