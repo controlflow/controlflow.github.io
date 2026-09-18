@@ -1,6 +1,40 @@
 @use "settings" as *;
 @use "sass:color";
 
+// JetBrains Mono v2.304; license: assets/fonts/jetbrains-mono/OFL.txt.
+
+@font-face {
+    font-family: "JetBrains Mono";
+    src: url("../assets/fonts/jetbrains-mono/JetBrainsMono-Regular.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    src: url("../assets/fonts/jetbrains-mono/JetBrainsMono-Italic.woff2") format("woff2");
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    src: url("../assets/fonts/jetbrains-mono/JetBrainsMono-Bold.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    src: url("../assets/fonts/jetbrains-mono/JetBrainsMono-BoldItalic.woff2") format("woff2");
+    font-style: italic;
+    font-weight: 700;
+    font-display: swap;
+}
+
 body, h1, h2, h3, h4, h5, h6,
 p, blockquote, pre, hr,
 dl, dd, ol, ul, figure {
@@ -136,7 +170,7 @@ pre {
 pre,
 code {
     font-size: 15px;
-    font-family: Consolas, "Courier New", Courier, monospace;
+    font-family: "JetBrains Mono", Consolas, "Courier New", Courier, monospace;
     border: 1px solid $grey-color-light;
     border-radius: 4px;
     background-color: #f8f8f8;

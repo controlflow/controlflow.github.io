@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Exception handling in F# 2.0 sequence expressions"
+title: "F# 2.0 sequence expressions exception handling hole"
 date: 2010-10-08 10:58:23
 author: Aleksandr Shvedov
 tags: fsharp seq ienumerable dispose finally
