@@ -5,54 +5,62 @@ date: 2010-11-24 03:37:00
 author: Aleksandr Shvedov
 tags: fsharp csharp async workflow event-based asynchronous pattern
 ---
-Сегодня предлагаю поговорить о модели асинхронного программирования в .NET, основанной на событиях ([event-based asynchronous pattern](http://msdn.microsoft.com/en-us/library/wewwczdw.aspx)). Если вкратце, то всё очень просто:
+The [event-based asynchronous pattern](http://msdn.microsoft.com/en-us/library/wewwczdw.aspx) is a model for asynchronous programming in .NET in which an operation reports its completion through an event. Here is a simple example:
 
 ```c#
-static void AsyncDownloadGoogle() {
+private static void AsyncDownloadGoogle()
+{
   var uri = new Uri("http://google.com");
   var client = new WebClient();
   
   DownloadDataCompletedEventHandler completed = null;
-  completed = (_, e) => {
-    // обрабатываем результат операции
-    if (e.Cancelled) {
-      Console.WriteLine("Операция отменена!");
-    } else if (e.Error != null) {
-      Console.WriteLine("Ошибка: {0}", e.Error);
-    } else {
+  completed = (_, e) =>
+  {
+    // Handle the operation's result.
+    if (e.Cancelled)
+    {
+      Console.WriteLine("Operation cancelled.");
+    }
+    else if (e.Error != null)
+    {
+      Console.WriteLine("Error: {0}", e.Error);
+    }
+    else
+    {
       byte[] page = e.Result;
-      Console.WriteLine("Загружено {0} байт", page.Length);
+      Console.WriteLine("Downloaded {0} bytes", page.Length);
     }
     
-    // отписка от события
+    // Unsubscribe from the event.
     client.DownloadDataCompleted -= completed;
   };
   
-  // подписываемся на результат операции
+  // Subscribe to the completion event.
   client.DownloadDataCompleted += completed;
   
-  // запускаем асинхронную операцию
+  // Start the asynchronous operation.
   client.DownloadDataAsync(uri);
   
-  // даём возможность отменить операцию
-  Console.WriteLine("Нажмите [esc] для отмены");
+  // Allow the user to cancel the operation.
+  Console.WriteLine("Press [esc] to cancel");
   var key = Console.ReadKey(true);
-  if (key.Key == ConsoleKey.Escape) {
+  if (key.Key == ConsoleKey.Escape)
+  {
     client.CancelAsync();
   }
 }
 ```
 
-То есть основа паттерна – получения результатов асинхронной операции через аргументы события (наследник класса `System.ComponentModel .AsyncCompletedEventArgs`), при этом существует возможность определить, что операция была отменена или завершена с ошибкой. Нюансы возникают в двух случаях:
+The operation's result is exposed through event arguments derived from `System.ComponentMode.AsyncCompletedEventArgs`. These arguments also indicate whether the operation was cancelled or failed. Two details require some care:
 
-* Если экземпляр класса, предоставляющего асинхронную операцию, планируется переиспользовать и результаты обрабатывать другим обработчиком, то следует отписывать обработчики после завершения операции (что может приводить к лишним телодвижениям, если вы подписываетесь анонимным методом или лямбда-выражением, как в примере выше).
-* Экземпляр класса, предоставляющий асинхронную операцию, может допускать одновременное исполнение некоторой операции (класс `System.Net.WebClient`, к сожалению, не из таких). В этом случае все методы (запуск, отмена асинхронной операции) должны обладать перегрузками, принимающими дополнительный параметр вида `object userState`, который позволяет отличать независимые операции друг от друга (обработчики результатов должны проверять значение свойства `UserState` в аргументе события).
+* If the same object will be reused for another asynchronous operation with a different result handler, the previous handler should be removed once the operation completes. This takes a little extra bookkeeping when the handler is an anonymous method or lambda expression, as in the example above.
+* Some classes support multiple concurrent operations on the same instance, though `System.Net.WebClient` does not. To distinguish those operations, the methods used to start and cancel them need overloads that accept an additional `object userState` parameter. Completion handlers must then check the `UserState` property of the event arguments.
 
-Возникает вопрос, как всё это дело использовать в F# и обязательно ли асинхронные операции должны выглядеть так же ущербно? На помощь приходят *F# async workflows*, позволяющие записывать асинхронные операции так же лаконично, как синхронные.
+How can we use this pattern in F# without all the manual event handling? *F# async workflows* let us express asynchronous operations almost as concisely as synchronous ones.
 
-Однако, чтобы использовать асинхронные операции внутри async workflow, требуются специальные метод, запускающие асинхронные операции и возвращающие объекты типа `Async<’a>`, представляющие собой некое асинхронное вычисление. В стандартную библиотеку F# входит несколько методов-расширений подобного рода, предназначенных для некоторых стандартных классов .NET, а так же метод `Async.FromBeginEnd()` позволяющие получить `Async<’a>` из асинхронных операций, заданных в виде пары методов Begin и End (старый добрый *APM-шаблон*).
+To use an operation within an async workflow, however, we need a method that wraps it in an `Async<'a>` value, representing an asynchronous computation. The F# standard library provides several such extension methods for common .NET classes. It also provides `Async.FromBeginEnd()`, which creates an `Async<'a>` from a pair of Begin and End methods following the *Asynchronous Programming Model (APM)*.
 
-Я это всё к тому, что *event-based asynchronous pattern* конечно же забыли, поэтому предлагаю вашему вниманию пару методов-расширений, предназначенных для преобразования асинхронных операций, выполненных в рамках данного паттерна, в родной для F# тип `Async<’a>` (получился неплохой пример применения метода `Async.FromContinuations`, надеюсь, комментариев будет достаточно):
+The event-based asynchronous pattern has no equivalent wrapper in the standard library at the time of writing. The following two extension methods bridge that gap, adapting event-based operations to F#'s `Async<'a>` type. They also illustrate how to use `Async.FromContinuations`:
 
 ```fsharp
 module AsyncExtensions
@@ -63,33 +71,33 @@ open System.ComponentModel
 #nowarn "40"
 type Async with
 
-  /// Преобразует асинхронную операцию, заданную в виде метода
-  /// запуска и события завершения (event-based asynchronous
-  /// pattern) в асинхронное вычисление F# async
+  /// Convert an operation with a start method and a completion
+  /// event (the event-based asynchronous pattern) into an
+  /// F# asynchronous computation.
   static member FromEventPattern
-      (completedEvent : IObservable<_>, // событие завершения
-       executeAction  : unit -> unit,   // запуск операции
-       ?cancelAction  : unit -> unit) = // отмена операции
+      (completedEvent : IObservable<_>, // Completion event.
+       executeAction  : unit -> unit,   // Start the operation.
+       ?cancelAction  : unit -> unit) = // Cancel the operation.
     
-    // функция запуска асинхронной операции
+    // Start the operation with the supplied continuations.
     let comp (onValue, onError, onCancel) =
       let onCancel () =
         onCancel (OperationCanceledException())
       
-      // подписываемся на событие завершения операции
+      // Subscribe to the operation's completion event.
       let rec subscription : IDisposable =
         completedEvent.Subscribe {
           new IObserver<#AsyncCompletedEventArgs> with
         
-          // если событие было возбуждено, проверяем статус
+          // Check the operation's status when the event fires.
           member x.OnNext(args) =
-            use __ = subscription // отписываемся при выходе
+            use __ = subscription // Unsubscribe on exit.
             if args.Cancelled then onCancel ()
             elif args.Error = null then onValue args
                                    else onError args.Error
         
-          // для обычных событий никогда не будет вызываться,
-          // но для любых IObservable<_> лучше предусмотреть
+          // Ordinary events do not call this, but an arbitrary
+          // IObservable<_> may, so handle it as well.
           member x.OnError(exc) =
             use __ = subscription in onError exc
         
@@ -97,46 +105,46 @@ type Async with
             use __ = subscription in onCancel ()
         }
       
-      try executeAction () // и запускаем асинхронную операцию
+      try executeAction () // Start the asynchronous operation.
       with _ ->
-           use __ = subscription // если запуск упадёт,
-           reraise ()            // то сразу отписываемся
+           use __ = subscription // If starting fails,
+           reraise ()            // unsubscribe immediately.
     
-    // формируем асинхронное вычисление
+    // Create the asynchronous computation.
     let operation = Async.FromContinuations comp
     
-    match cancelAction with // если указали метод отмены,
-      | Some action ->    // то оборачиваем в Async.OnCancel
+    match cancelAction with // If a cancellation action was supplied,
+      | Some action ->    // register it with Async.OnCancel.
              async { use! __ = Async.OnCancel action
                      return! operation }
       | None -> operation
 
-  /// Преобразует асинхронную операцию, заданную в виде метода
-  /// запуска и события завершения (event-based asynchronous
-  /// pattern) и поддерживающую несколько одновременных вызовов
-  /// в асинхронное вычисление F# async
+  /// Convert an operation with a start method and a completion
+  /// event (the event-based asynchronous pattern) into an
+  /// F# asynchronous computation, with support for multiple
+  /// concurrent operations.
   static member FromEventPattern
-      (completedEvent : IObservable<_>, // событие завершения
-       executeAction  : obj -> unit, // ф-ция запуск операции
-       ?cancelAction  : obj -> unit, // ф-ция отмены операции
-       ?userToken     : obj) =      // идентификатор операции
+      (completedEvent : IObservable<_>, // Completion event.
+       executeAction  : obj -> unit, // Start the operation.
+       ?cancelAction  : obj -> unit, // Cancel the operation.
+       ?userToken     : obj) =      // Operation identifier.
 
-    // если идентификатор операции не задан, то создаём новый
+    // Create an identifier if none was supplied.
     let token = match userToken with Some token -> token
                                    | None -> new obj()
 
-    // если задан метод отмены операции
+    // Pass the identifier to the cancellation action, if any.
     let cancel = Option.map (fun f () -> f token) cancelAction
 
     Async.FromEventPattern<#AsyncCompletedEventArgs>(
-      completedEvent =      // фильтруем события
-          Observable.filter // по идентификатору
+      completedEvent =      // Filter completion events
+          Observable.filter // by operation identifier.
               (fun e -> e.UserState = token) completedEvent,
       ?cancelAction = cancel,
       executeAction = fun() -> executeAction token)
 ```
 
-Теперь можно очень легко определить тип-расширение для операции `DownloadData` класса `WebClient` (обратите внимание на соглашение об именовании подобных методов – префикс `Async`):
+We can now define an extension member for `WebClient`'s `DownloadData` operation. Note the `Async` prefix, following the F# naming convention for these methods:
 
 ```fsharp
 type WebClient with
@@ -147,7 +155,7 @@ type WebClient with
        (fun()-> this.CancelAsync()))
 ```
 
-Можно дополнительно преобразовывать результат операции, доставая из аргументов события результат операции:
+We can also transform the result so that the workflow returns the downloaded data rather than the event arguments:
 
 ```fsharp
 type WebClient with
@@ -162,7 +170,7 @@ type WebClient with
     }
 ```
 
-Теперь исходный пример можно выразить на F# следующим образом:
+Using this extension, we can express the original example in F# as follows:
 
 ```fsharp
 open System
@@ -175,16 +183,16 @@ let asyncDownloadGoogle() =
   use token = new CancellationTokenSource()
   
   let work = async {
-    // обработчик отмены async workflow
+    // Handle cancellation of the async workflow.
     use! cancel = Async.OnCancel (fun() ->
-                        printfn "Операция отменена!")
+                        printfn "Operation cancelled.")
 
-    // вызов асинхронной операции и работа с результатом
+    // Run the asynchronous operation and process its result.
     try let! page = client.AsyncDownloadData(uri)
-        printfn "Загружено %d байт" page.Length
+        printfn "Downloaded %d bytes" page.Length
 
-    // обработка асинхронных ошибок
-    with e -> printfn "Ошибка: %s" e.Message
+    // Handle asynchronous errors.
+    with e -> printfn "Error: %s" e.Message
   }
 
   Async.RunSynchronously(work, cancellationToken = token.Token)
@@ -192,4 +200,4 @@ let asyncDownloadGoogle() =
   if (key.Key = ConsoleKey.Escape) then token.Cancel()
 ```
 
-Использование `CancellationTokenSource` выглядит не очень симпатично (определение обработчика внутри workflow), однако это мощный и обобщённый механизм отмены асинхронных операций, при этом от пользователя скрывается передача токена по всему workflow, что существенно упрощает код.
+Using `CancellationTokenSource` still requires some setup, including a cancellation handler inside the workflow. In return, it provides a general cancellation mechanism, while F# propagates the token through the workflow automatically. There is no need to pass it explicitly through every asynchronous call.

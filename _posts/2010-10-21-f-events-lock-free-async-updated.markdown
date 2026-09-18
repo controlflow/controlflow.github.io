@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "F# events + lock-free + async (updated)"
+title: "F# events: lock-free subscription & async firing"
 date: 2010-10-21 02:05:00
 author: Aleksandr Shvedov
 tags: fsharp events delegate lock-free subscription

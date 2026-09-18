@@ -58,7 +58,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 static class Program {
-  static void Main() {
+  private static void Main() {
     var xs = new List<Action>();
     foreach (var i in Enumerable.Range(1, 3)) {
       xs.Add(() => Console.WriteLine(i));

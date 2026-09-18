@@ -1,13 +1,13 @@
 ---
 layout: post
-title: "Рекурсивные определения значений в F#"
+title: "Recursive value definitions in F#"
 date: 2010-11-28 22:41:00
 author: Aleksandr Shvedov
 tags: fsharp letrec let rec recursive lazy
 ---
-Сегодня мы поговорим о рекурсивных `let`-биндингах в F#, которые являются неотъемлемой частью разработки на функциональных языках семейства ML. Хм, а что тут может быть вообще интересного?
+Recursive `let` bindings are a familiar part of programming in F# and other languages in the ML family. There is more to them, however, than recursive functions.
 
-Интерес представляет то, что с помощью `let rec` можно определять не только *рекурсивные* и *взаимнорекурсивные функции*, но ещё и *рекурсивные значения*. Сложно представить? На самом деле это обычное дело, например, вам надо подписаться на `IObservable` каким-нибудь хитрым `IObserver`'ом, который должен уметь сам отписываться при определённых условиях:
+With `let rec`, we can define not only *recursive* and *mutually recursive functions*, but also *recursive values*. A practical example is subscribing to an `IObservable` with an `IObserver` that needs to unsubscribe itself under certain conditions:
 
 ```fsharp
 open System
@@ -24,7 +24,7 @@ let rec subscription : IDisposable =
   }
 ```
 
-То есть мы использовали значение `subscription` внутри самого определения того, чем же `subscription` будет на самом деле являться. Ключевой момент тут заключается в том, что все обращения к `subscription` внутри `IObserver`'а являются отложенными, они не будут производиться во время вызова `Subscribe()`, иначе это приводило либо к ошибке компиляции, если компилятор может выяснить, что использование не является отложенным:
+Here, `subscription` is referenced inside its own definition. This works only if the observer's references to `subscription` are deferred until after `Subscribe()` returns. If the value is needed during its own initialization, the compiler can reject the definition when it detects the problem:
 
 ```fsharp
 let rec foo : int = foo
@@ -32,7 +32,7 @@ let rec foo : int = foo
 
 > **error FS0031:** The value 'foo' will be evaluated as part of its own definition
 
-Либо результировать ошибкой времени исполнения с непонятным сообщением:
+If the compiler cannot detect the early access, it can instead fail at runtime with a less obvious error message:
 
 ```fsharp
 let rec foo =
@@ -41,7 +41,7 @@ let rec foo =
 
 > **System.InvalidOperationException:** ValueFactory attempted to access the Value property of this instance.
 
-Вот ещё один пример рекурсивного определения значения бесконечной последовательности чисел Фибоначчи, возможного благодаря тому, что `seq`-выражения являются отложенными:
+Another example is an infinite Fibonacci sequence. Its recursive definition is possible because sequence expressions defer evaluation:
 
 ```fsharp
 let rec fibs =
@@ -50,7 +50,7 @@ let rec fibs =
     } |> Seq.cache
 ```
 
-Или более «понятный» вариант, через сложение последовательности с самой собой, смещённой на один элемент:
+An alternative is to add the sequence to a copy of itself shifted by one element:
 
 ```fsharp
 let rec fibs' =
@@ -62,19 +62,19 @@ let rec fibs' =
     } |> Seq.cache
 ```
 
-В любом случае компилятор F# не любит рекурсивные определения значений и ругается на них следующим предупреждением:
+For these recursive value definitions, the F# compiler issues the following warning:
 
 > **warning FS0040:** This and other recursive references to the object(s) being defined will be checked for initialization-soundness at runtime through the use of a delayed reference. This is because you are defining one or more recursive objects, rather than recursive functions.
 
-Которое легко прибить директивой компилятора:
+The warning can be suppressed with this compiler directive:
 
 ```fsharp
 #nowarn "40"
 ```
 
-Из сообщения предупреждения сразу становится интересно (по крайней мере, мне), что же такое *«delayed reference»* и во что компилируются обращения к значению внутри определения его самого, а так же что происходит со значением, если во время его инициализации происходит исключение.
+The warning raises a few questions: what is a *delayed reference*, how are references to a value within its own definition compiled, and what happens if initialization throws an exception?
 
-Например, модуль с таким значением (абсолютно бессмысленные, но содержащим использование самого себя внутри своего определения):
+Consider this deliberately minimal module, where an unused function refers to the value being defined:
 
 ```fsharp
 module LetRec
@@ -84,7 +84,7 @@ let rec foo =
   in 0
 ```
 
-Реально компилятор F# транлирует в примерно следующий код:
+The F# compiler translates it into something roughly equivalent to:
 
 ```fsharp
 let rec private foo' =
@@ -96,26 +96,26 @@ let rec private foo' =
 let foo = Lazy.force foo'
 ```
 
-Здесь всё равно присутствует `let rec`-привязка, но за ней больше не скрывается какая-либо логика. Тело `lazy`-выражения неявно становится телом функции `unit -> ‘T`, которая становится функцией отложенной инициализации значения, представляемого классом `System.Lazy<’T>`. То есть инициализация рекурсивного значения подразумевает создание отложенного значения `Lazy<’T>` и его последующее немедленное вычисление, при этом все обращения к значению заменяются на вычисления отложенного значения.
+The `let rec` binding is still present, but the initialization check is now handled by `lazy`. The body of the `lazy` expression becomes a `unit -> 'T` function that initializes a `System.Lazy<'T>` instance. Defining the recursive value therefore creates a lazy value and immediately forces it. References to the value inside its definition are replaced with calls that force the same lazy value.
 
-Логика `Lazy<’T>` такова, что если во время вычисления значения происходит обращение к этому же значению, то возбуждается исключение `System.InvalidOperationException` (иначе бы происходило зацикливание и переполнение стека), что мы наблюдали в примере выше. Если во время вычисления отложенного значения произошло исключение, то оно будет проброшено к клиентскому коду, но и будет сохранено внутри `Lazy<’T>` чтобы быть выброшено при возможных следующих обращениях к отложенному значению. В этом легко убедиться, если «вытащить» обращение к рекурсивному значению из кода его инициализации, например:
+If `Lazy<'T>` is forced while its value is already being computed, it throws `System.InvalidOperationException` rather than recursing indefinitely and overflowing the stack. This explains the runtime error above. If initialization throws an exception, that exception is propagated to the caller and cached by `Lazy<'T>` so that later attempts to force the value throw it again. We can observe this by letting a reference to the recursive value escape from its initializer:
 
 ```fsharp
 let mutable f = (fun() -> 0)
 
 try
   let rec foo : int =
-    f <- (fun() -> foo) // сохраняем обращение к foo в f
-    failwith "uups!"    // и выбрасываем исключение
+    f <- (fun() -> foo) // Save a reference to foo in f.
+    failwith "Initialization failed."    // Then throw an exception.
 
   printfn "foo = %d" foo
 with e ->
   printfn "foo = %A" e.Message
 ```
 
-> foo = uups!
+> foo = Initialization failed.
 
-Если теперь обратиться к значению функционального типа `f`, то мы снова получим исключение:
+Calling the function stored in `f` now produces the same exception:
 
 ```fsharp
 try
@@ -124,14 +124,15 @@ with e ->
   printfn "f() = %A" e.Message
 ```
 
-> f() = uups!
+> f() = Initialization failed.
 
-В итоге следует понимать, что обращения к значению внутри определения его самого обращаются в манипуляции с классом `Lazy<’T>`, которые имеют небольшой оверхед и могут приводить к исключениям в неожиданных местах, поэтому следует свести к минимуму вероятность возникновения исключения в коде инициализации рекурсивного значения. Старайтесь вовсе избегать использования рекурсивных значений, заменяя значения на функции или используя вспомогательные «мутабельные» средства. Например, в [Rx](http://msdn.microsoft.com/en-us/devlabs/ee794896.aspx) для решения проблемы с `IObserver`'ом из начала поста применяется класс `MutableDisposable`:
+References to a value within its own definition thus involve `Lazy<'T>`, adding some overhead and potentially surfacing initialization errors later, when an escaped reference is used. Keep initialization simple, and consider whether a function or a small amount of mutable state would be clearer. For the subscription example at the start of this post, the version of [Rx](http://msdn.microsoft.com/en-us/devlabs/ee794896.aspx) available at the time provided `MutableDisposable`:
 
 ```c#
-var subscribtion = new System.Disposables.MutableDisposable();
+var subscription = new System.Disposables.MutableDisposable();
 
-subscribtion.Disposable = source.Subscribe(x => {
-  if (x > 0) subscribtion.Dispose();
+subscription.Disposable = source.Subscribe(x =>
+{
+  if (x > 0) subscription.Dispose();
 });
 ```

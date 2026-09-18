@@ -5,7 +5,7 @@ date: 2010-11-28 15:12:00
 author: Aleksandr Shvedov
 tags: csharp dotnet remoting contextboundobject marshalbyrefobject inotifypropertychanged
 ---
-Мне было нечего делать и к бесчисленному количеству вариантов удобной реализации классами интерфейса `System.ComponentModel.INotifyPropertyChanged` я набросал вариант с использованием такого загадочного класса .NET, как `System.ContextBoundObject`, являющегося наследником `System.MarshalByRefObject` и предоставляющего интерфейс для перехвата обращения к таким объектам. Реализация (прошу прощения за отсутствие комментариев):
+There are many ways to reduce the boilerplate involved in implementing `System.ComponentModel.INotifyPropertyChanged`. Here is an experiment using `System.ContextBoundObject`, a .NET class that derives from `System.MarshalByRefObject` and allows calls to its instances to be intercepted through the .NET Remoting infrastructure:
 
 ```c#
 using System;
@@ -18,7 +18,8 @@ using System.Runtime.Remoting.Contexts;
 using System.Runtime.Remoting.Messaging;
 using System.Threading;
 
-namespace SomeNamespace {
+namespace SomeNamespace
+{
 
 using PropertyCache = Dictionary<MethodBase, PropertyChangedEventArgs>;
 
@@ -28,30 +29,35 @@ public abstract class ViewModelBase
 {
   public event PropertyChangedEventHandler PropertyChanged;
 
-  static readonly object cacheSync = new object();
-  static readonly Dictionary<Type, PropertyCache> cache = new Dictionary<Type, PropertyCache>();
+  private static readonly object cacheSync = new object();
+  private static readonly Dictionary<Type, PropertyCache> cache = new Dictionary<Type, PropertyCache>();
 
-  static PropertyCache Resolve(Type type) {
+  private static PropertyCache Resolve(Type type)
+  {
     PropertyCache props;
-    lock (cacheSync) {
+    lock (cacheSync)
+    {
       if (cache.TryGetValue(type, out props)) return props;
     }
 
     props = new PropertyCache();
-    foreach (var property in type.GetProperties()) {
+    foreach (var property in type.GetProperties())
+    {
       if (!property.CanWrite) continue;
 
       var notify = Attribute.GetCustomAttribute(
         property, typeof(NotifyAttribute)) as NotifyAttribute;
 
-      if (notify == null || notify.Enabled) {
+      if (notify == null || notify.Enabled)
+      {
         props.Add(
           property.GetSetMethod(),
           new PropertyChangedEventArgs(property.Name));
       }
     }
 
-    lock (cacheSync) {
+    lock (cacheSync)
+    {
       if (!cache.ContainsKey(type)) cache.Add(type, props);
     }
 
@@ -59,34 +65,43 @@ public abstract class ViewModelBase
   }
 
   [AttributeUsage(AttributeTargets.Property)]
-  public sealed class NotifyAttribute : Attribute {
-    public NotifyAttribute(bool enabled) { Enabled = enabled; }
+  public sealed class NotifyAttribute : Attribute
+  {
+    public NotifyAttribute(bool enabled)
+    {
+      Enabled = enabled;
+    }
 
     public bool Enabled { get; private set; }
   }
 
   [AttributeUsage(AttributeTargets.Class)]
-  sealed class NotifyPropertyChangedAttribute : ContextAttribute, IContributeObjectSink
+  private sealed class NotifyPropertyChangedAttribute : ContextAttribute, IContributeObjectSink
   {
     public NotifyPropertyChangedAttribute()
-      : base("NotifyPropertyChanged") { }
+      : base("NotifyPropertyChanged")
+    {
+    }
 
-    public override void GetPropertiesForNewContext(IConstructionCallMessage message) {
+    public override void GetPropertiesForNewContext(IConstructionCallMessage message)
+    {
       message.ContextProperties.Add(this);
     }
 
-    IMessageSink IContributeObjectSink.GetObjectSink(MarshalByRefObject obj, IMessageSink nextSink) {
+    IMessageSink IContributeObjectSink.GetObjectSink(MarshalByRefObject obj, IMessageSink nextSink)
+    {
       return new NotifySink((ViewModelBase) obj, nextSink);
     }
   }
 
-  sealed class NotifySink : IMessageSink
+  private sealed class NotifySink : IMessageSink
   {
-    readonly IMessageSink next;
-    readonly ViewModelBase target;
-    readonly PropertyCache props;
+    private readonly IMessageSink next;
+    private readonly ViewModelBase target;
+    private readonly PropertyCache props;
 
-    public NotifySink(ViewModelBase target, IMessageSink next) {
+    public NotifySink(ViewModelBase target, IMessageSink next)
+    {
       this.next = next;
       this.target = target;
       this.props = Resolve(target.GetType());
@@ -94,16 +109,20 @@ public abstract class ViewModelBase
 
     public IMessageSink NextSink { get { return this.next; } }
 
-    public IMessageCtrl AsyncProcessMessage(IMessage msg, IMessageSink sink) {
+    public IMessageCtrl AsyncProcessMessage(IMessage msg, IMessageSink sink)
+    {
       throw new NotSupportedException(
         "AsyncProcessMessage is not supported.");
     }
 
-    public IMessage SyncProcessMessage(IMessage msg) {
+    public IMessage SyncProcessMessage(IMessage msg)
+    {
       var call = msg as IMethodCallMessage;
-      if (call != null) {
+      if (call != null)
+      {
         PropertyChangedEventArgs e;
-        if (this.props.TryGetValue(call.MethodBase, out e)) {
+        if (this.props.TryGetValue(call.MethodBase, out e))
+        {
           var handler = this.target.PropertyChanged;
           if (handler != null) handler(target, e);
         }
@@ -113,8 +132,13 @@ public abstract class ViewModelBase
     }
   }
 }
+```
 
-public class FooViewModel : ViewModelBase {
+Usage:
+
+```c#
+public class FooViewModel : ViewModelBase
+{
   public string Foo { get; set; }
   public string Bar { get; set; }
 
@@ -122,30 +146,34 @@ public class FooViewModel : ViewModelBase {
   public string Baz { get; set; }
 }
 
-static class Program {
-  static void Main() {
+static class Program
+{
+  private static void Main()
+  {
     var vm = new FooViewModel();
 
-    vm.PropertyChanged += (_, e) => {
+    vm.PropertyChanged += (_, e) =>
+    {
       Console.WriteLine(e.PropertyName + " changed!");
-    }
+    };
 
     vm.Foo = "foo";
     vm.Bar = "bar";
     vm.Baz = "baz";
   }
-}}
+}
+}
 ```
 
-Тут есть интересные моменты:
+A few details are worth examining:
 
-* Атрибут `[NotifyPropertyChanged]` определяется приватным вложенным классом и применяется к типу, внутри определения которого он определён.
-* Атрибут `[Notify]` определяется публичным вложенным классом, что даёт интересный эффект: внутри определений наследников `ViewModelBase` данный атрибут «видно» в списке автодополнения *IntelliSense*, а в других местах - нет, так как требуется указание полного имени: `[ViewModelBase.Notify]`.
-* Экземпляры классов `PropertyChangedEventArgs` создаются только один раз и переиспользуются при всех изменениях свойств.
+* `[NotifyPropertyChanged]` is defined as a private nested class and applied to its own containing type.
+* `[Notify]` is defined as a public nested class. This makes it available by its short name in IntelliSense within classes derived from `ViewModelBase`. Outside that scope, it needs to be qualified as `[ViewModelBase.Notify]`.
+* `PropertyChangedEventArgs` instances are created once per cached property and reused for subsequent notifications.
 
-К сожалению, у данного костыля есть два *существенных* недостатка:
+This approach has two substantial drawbacks:
 
-* Всё это дело жестоко тормозит: на три (!) порядка медленнее, чем реализация «руками». Что делать, но за использование инфраструктуры .NET Remoting приходится платить такую цену.
-* Самый главный недостаток: все наследники `ViewModelBase` невозможно отлаживать, так как их экземпляры представляют собой *transparent proxy* и в отладчике VisualStudio просто невозможно посмотреть содержимое полей и свойств этих экземпляров.
+* Performance: this approach was three orders of magnitude slower than raising the event directly. Intercepting calls through .NET Remoting carries considerable overhead.
+* Debugging: instances of classes derived from `ViewModelBase` are accessed through a *transparent proxy*. In the version of Visual Studio used for this experiment, the debugger could not inspect their fields and properties.
 
-Код я привёл лишь в целях ознакомления с возможностями инфраструктуры .NET Remoting, пожалуйста, никогда его не используйте для решения реальных задач.
+This code is an illustration of what the .NET Remoting infrastructure can do. Given the performance and debugging costs, I would not use it in production.

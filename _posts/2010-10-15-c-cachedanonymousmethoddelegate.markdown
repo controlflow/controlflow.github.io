@@ -12,7 +12,7 @@ Although invoking a delegate is roughly as fast as calling a method through an i
 The interesting part is the compiler's behavior and the code it generates. Consider this method containing a lambda expression:
 
 ```c#
-static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source)
+private static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source)
 {
   return source.Where(x => x.IsDeveloper);
 }
@@ -21,7 +21,7 @@ static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source)
 The syntax is familiar enough that it is easy to overlook the delegate instance involved. Making the delegate construction explicit gives:
 
 ```c#
-static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source)
+private static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source)
 {
   return source.Where(new Func<Person, bool>(x => x.IsDeveloper));
 }
@@ -31,9 +31,9 @@ In this example, the lambda does not capture any local variables or require acce
 
 ```c#
 [CompilerGenerated]
-static Func<Person, bool> CS9_CachedAnonymousMethodDelegate1;
+private static Func<Person, bool> CS9_CachedAnonymousMethodDelegate1;
 
-static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source)
+private static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source)
 {
   return source.Where(
     CS9_CachedAnonymousMethodDelegate1 != null

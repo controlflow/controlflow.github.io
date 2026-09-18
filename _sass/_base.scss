@@ -1,6 +1,40 @@
 @use "settings" as *;
 @use "sass:color";
 
+// IBM Plex Sans; license: assets/fonts/ibm-plex-sans/LICENSE.txt.
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    src: url("../assets/fonts/ibm-plex-sans/IBMPlexSans-Regular.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    src: url("../assets/fonts/ibm-plex-sans/IBMPlexSans-Italic.woff2") format("woff2");
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    src: url("../assets/fonts/ibm-plex-sans/IBMPlexSans-Bold.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    src: url("../assets/fonts/ibm-plex-sans/IBMPlexSans-BoldItalic.woff2") format("woff2");
+    font-style: italic;
+    font-weight: 700;
+    font-display: swap;
+}
+
 // JetBrains Mono v2.304; license: assets/fonts/jetbrains-mono/OFL.txt.
 
 @font-face {
@@ -46,7 +80,7 @@ body {
     font-family: $base-font-family;
     font-size: $base-font-size;
     line-height: $base-line-height;
-    font-weight: 300;
+    font-weight: 400;
     color: $text-color;
     background-color: $background-color;
     -webkit-text-size-adjust: 100%;
@@ -146,8 +180,9 @@ blockquote {
 }
 
 pre {
-    margin-left: 0.75em;
-    margin-right: 0.75em;
+    line-height: 1.4;
+    margin-left: 0.8em;
+    margin-right: 0.8em;
 }
 
 @include media-query($on-palm) {
@@ -184,7 +219,7 @@ code {
 }
 
 pre {
-    padding: 12px 8px;
+    padding: 12px 12px;
     border-radius: 16px;
 
     > code {

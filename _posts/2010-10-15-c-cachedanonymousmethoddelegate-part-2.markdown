@@ -10,7 +10,7 @@ The delegate caching described in the previous post is not limited to non-captur
 Consider the following code:
 
 ```c#
-static void ShowDevelopersBySkill(IEnumerable<Team> teams, int level)
+private static void ShowDevelopersBySkill(IEnumerable<Team> teams, int level)
 {
   foreach (var team in teams)
   {
@@ -39,7 +39,7 @@ Capturing the parameter allows it to outlive the method invocation. The compiler
 At first glance, the call to `ShowBy()` in the loop appears to require a new delegate on every iteration. Within a single method invocation, however, all these delegates capture the same `level` variable and refer to the same closure object. One delegate instance is therefore sufficient. The C# compiler recognizes this case and generates code equivalent to the following:
 
 ```c#
-static void ShowDevelopersBySkill(IEnumerable<Team> teams, int level)
+private static void ShowDevelopersBySkill(IEnumerable<Team> teams, int level)
 {
   Func<Developer, bool> CachedAnonymousMethodDelegate1 = null;
   var closureLocal = new DisplayClass1();

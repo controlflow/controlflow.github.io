@@ -14,8 +14,8 @@ What do these C# operators have in common? They are expressions parameterized by
 Rather than introducing special language syntax for these operations, F# provides corresponding values in its standard library:
 
 ```c#
-typeof(List<T>)     =>  typeof<List<'T>>
-typeof(Action<,,>)  =>  typedefof<Action<_,_,_>>
+typeof(List<T>)     =>  typeof<List<T>>
+typeof(Action<,,>)  =>  typedefof<Action<_, _, _>>
 default(decimal)    =>  Unchecked.defaultof<decimal>
 sizeof(int)         =>  sizeof<int>
 ```
@@ -63,7 +63,7 @@ Explicit type parameter lists are not allowed on `let` bindings inside expressio
 For a type function such as `typeof<T>`, the result type does not depend on the type parameter: the result is always a `System.Type`. There is therefore no information in the result type from which to infer `T`, and inference would otherwise default it to `obj`. It makes sense to *require an explicit type argument*. The standard library's `[<RequiresExplicitTypeArguments>]` attribute does exactly this. It can be applied to `let` bindings and methods to require explicit type arguments rather than allowing F# to infer them. This is useful when a type parameter cannot be inferred from the arguments or the result type. Without the attribute, a call like the following can silently infer `obj`:
 
 ```fsharp
-type Foo() =
+type Foo =
    member this.ServicesOfType<'T>(name: string) =
      ...
 

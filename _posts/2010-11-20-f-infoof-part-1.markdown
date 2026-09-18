@@ -1,13 +1,13 @@
 ---
 layout: post
-title: "F# infoof (part 1)"
+title: "F# infoof operator (part 1)"
 date: 2010-11-20 04:15:00
 author: Aleksandr Shvedov
 tags: fsharp infoof quotations patterns pattern-matching
 ---
-Сегодня предлагаю обсудить такие элементы F#, как совпадение с образцом (*pattern matching*) и активные образцы F# (*active patterns*), которые незаменимы, при работе с цитированием кода (*F# quotations*). В качестве задания, попробуем написать набор функций, логически похожих на `typeof<T>` и предназначенных получения различных наследников `System.Reflection.MemberInfo` для заданных свойств, методов, функций, конструкторов и прочих элементов кода. То есть напишем на F# аналог несуществующего оператора `infoof()` (читай *info-of*), аналоги которого все кому не лень, реализуют в C# на базе *Expression Trees*, например, [вот](http://codebetter.com/blogs/patricksmacchia/archive/2010/06/28/elegant-infoof-operators-in-c-read-info-of.aspx) (обсуждение Эрика Липперта [здесь](http://blogs.msdn.com/b/ericlippert/archive/2009/05/21/in-foof-we-trust-a-dialogue.aspx)).
+This series explores F# *pattern matching* and *active patterns*, two useful tools for working with *F# quotations*. As an example, we'll build a set of functions similar in purpose to `typeof<T>`, returning instances of `System.Reflection.MemberInfo` subclasses for properties, methods, functions, constructors, and other code elements. In effect, we'll implement an `infoof()` operation, pronounced *info-of*. Similar helpers are often written in C# using *expression trees*, as in [this example](http://codebetter.com/blogs/patricksmacchia/archive/2010/06/28/elegant-infoof-operators-in-c-read-info-of.aspx). Eric Lippert discusses the idea [here](http://blogs.msdn.com/b/ericlippert/archive/2009/05/21/in-foof-we-trust-a-dialogue.aspx).
 
-Давайте попробуем описать простую функцию, получающую процитированное выражение F# и возвращающую объект типа `System.Reflection.PropertyInfo` в случае, если переданное выражение является выражением доступа к свойству:
+Let's start with a function that accepts a quoted F# expression and returns a `System.Reflection.PropertyInfo` when the expression represents a property access:
 
 ```fsharp
 open Microsoft.FSharp.Quotations.Patterns
@@ -18,7 +18,7 @@ let propertyof expr =
     | _ -> failwith "Not a property expression"
 ```
 
-Всё, что делает данная функция – использует «активный образец» (или «активный шаблон», *active pattern*) из модуля `Microsoft.FSharp.Quotations.Patterns` для попытки извлечения выражения доступа к свойству. Функцию легко использовать для получения `PropertyInfo` статических свойств и свойств различных переменных и литералов, доступных в контексте вызова `propertyof`:
+The function uses the `PropertyGet` active pattern from `Microsoft.FSharp.Quotations.Patterns` to recognize a property access and extract its metadata. It works for static properties and for properties accessed through variables or literals available at the call site:
 
 ```fsharp
 propertyof<@ (null : string).Length @>
@@ -40,7 +40,7 @@ val it : System.Reflection.PropertyInfo =
                     PropertyType = System.Boolean; ...}
 ```
 
-Однако функцией будет сложно воспользоваться, если надо будет получить `PropertyInfo` уровня экземпляра, не имея самого экземпляра класса. Чтобы решить данную проблему, можно позволить помимо выражения доступа к свойству, передавать лямбда-выражение, состоящие из выражения доступа к свойству через параметр лямбды:
+Accessing an instance property this way is less convenient when no instance is available. We can support that case by also accepting a quoted lambda whose body accesses a property through the lambda parameter:
 
 ```fsharp
 <@ fun(s: string) -> s.Length @>
@@ -49,7 +49,7 @@ val it : Quotations.Expr<(string -> int)> =
   Lambda (s, PropertyGet (Some (s), Int32 Length, []))
 ```
 
-Новая версия функции `propertyof` принимает вид:
+The revised `propertyof` function becomes:
 
 ```fsharp
 let propertyof expr =
@@ -60,9 +60,9 @@ let propertyof expr =
     | _ -> failwith "Not a property expression"
 ```
 
-Тут и раскрывается вся соль совпадения с образцом: шаблоны-образцы могут быть *вложены друг в друга*, что делает pattern-matching очень мощной техникой, позволяющей легко «опознавать» сложные структуры и конструкции различных объектов. То есть если выражение `expr` является лямбда-выражением, то параметру лямбда выражение будет дано имя `arg`, а тело лямбда-выражения будет проверяться на соответствие шаблону `PropertyGet(Some(Var var), info, _)`, который совпадает с выражениями доступа к свойству уровня экземпляра (иначе первый параметр шаблона `PropertyGet` будет равняться `None`). Причём экземпляр, к чьему свойству происходит обращение, должен быть задан переменной, совпадающей с шаблоном `Var var`. Осталось лишь проверить с помощью *guard-выражения* `when` идентичность переменной `var` и аргумента лямбда-выражения `arg`, тем самым запретив к совпадению лямдба-выражения вида: `fun x -> someOtherVar.Property`. Вот и всё!
+This demonstrates an important feature of pattern matching: patterns can be *nested*, allowing complex structures to be recognized directly. If `expr` is a lambda, its parameter is bound to `arg`, and its body is matched against `PropertyGet(Some(Var var), info, _)`. The `Some` requires an instance property access; a static property would have `None` in that position. The receiver must itself be a variable, matched by `Var var`. Finally, the `when` *guard* checks that `var` is the same variable as the lambda parameter `arg`. This rejects expressions such as `fun x -> someOtherVar.Property`, where the property is accessed through a different variable.
 
-Ок, давайте попробуем ещё один вариант выражения, доступа к свойству необычного литерала (`123I` – это числовой литерал типа `BigInteger` в F#):
+Now consider a property access on a different kind of literal. In F#, `123I` is a numeric literal of type `BigInteger`:
 
 ```fsharp
 propertyof<@ 123I.IsZero @>
@@ -72,7 +72,7 @@ System.Exception: Not a property expression
    at <StartupCode$FSI_0049>.$FSI_0049.main@()
 ```
 
-Хм, как же на самом деле цитируется данное выражение?
+Looking at the quotation for a similar property access reveals why this does not match:
 
 ```fsharp
 <@ 123I.IsOne @>
@@ -83,7 +83,7 @@ val it : Quotations.Expr<bool> =
      PropertyGet (Some copyOfStruct, Boolean IsOne, []))
 ```
 
-То есть на самом деле F# создаёт `let`-биндинг, инициализирует его конструктором `BigInteger` и затем осуществляет обращение к свойству данного биндинга, то есть выражение `123I.IsOne` цитируется как `let copyOfStruct = 123I in copyOfStruct.IsOne`. Добавим образец, совпадающий и с такими выражениями, функция примет вид:
+F# introduces a `let` binding, initializes it with the `BigInteger` value, and then accesses a property through that binding. In other words, `123I.IsOne` is quoted as `let copyOfStruct = 123I in copyOfStruct.IsOne`. Adding a pattern for this form gives:
 
 ```fsharp
 let propertyof expr =
@@ -95,7 +95,7 @@ let propertyof expr =
     | _ -> failwith "Not a property expression"
 ```
 
-Обратите внимание, что я объединил два образца через *ИЛИ-шаблон* `|` (ещё пример: `match x with 1 | 2 | 3 -> true | _ -> false`), так как оба образца содержат одинаковый набор имён для совпадений (`arg`, `var`, `info`) соответственно идентичных типов. Обратите внимание, что ограничивающее `when`-выражение тут действует на оба возможных совпадения *ИЛИ-шаблона*. Проверяем работоспособность:
+The `Lambda` and `Let` cases are combined using an *OR pattern*, written with `|`, as in `match x with 1 | 2 | 3 -> true | _ -> false`. This is possible because both alternatives bind the same names (`arg`, `var`, and `info`) with the same types. The `when` guard applies to both alternatives. Here are several examples:
 
 ```fsharp
 [ propertyof<@ System.Console.Out @>
@@ -106,11 +106,11 @@ let propertyof expr =
 |> List.iter (printfn "%A")
 ```
 
-Выводит на экран:
+The output is:
 
     System.IO.TextWriter Out
     Boolean IsClass
     Int32 Length
     Int32 Length
 
-Ок, остановимся на данном варианте и в следующем посте попробуем описать функцию посложнее: `methodof`.
+This version is sufficient for now. In the next post, we'll build the more involved `methodof` function.

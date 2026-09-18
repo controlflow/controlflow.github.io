@@ -1,11 +1,11 @@
 ---
 layout: post
-title: "С# attribute-target-specifier"
+title: "C# attribute-target-specifier"
 date: 2010-11-04 18:51:04
 author: Aleksandr Shvedov
 tags: csharp attributes typevar
 ---
-Забавно, не смотря на то, что грамматика C# для указания аннотируемого атрибутом элемента языка, предусматривает ограниченный набор значений:
+The C# grammar lists a limited set of attribute targets, which specify the language element to which an attribute applies:
 
 > *attribute-section:*<br/>
 >     [ *attribute-target-specifier<sub>opt</sub>  attribute-list* ]<br/>
@@ -23,27 +23,26 @@ tags: csharp attributes typevar
 >     `return`<br/>
 >     `type`
 
-На деле (компилятор С# 4.0) всё оказывается несколько иначе, код:
+The C# 4.0 compiler is less restrictive than this grammar suggests. Consider the following code:
 
 ```c#
 [someCrazyAttributeTargetLocation: Serializable]
-class Foo { }
+class Foo;
 ```
 
-Компилируется без ошибок, но с одним warning’ом:
+It compiles without errors, but produces one warning:
 
 > warning CS0658: ‘someCrazyAttributeTargetLocation’ is not a recognized attribute location. All attributes in this block will be ignored.
 
-Соответственно, в рантайме получаем `typeof(Foo).IsSerializable == false`. Однако, [читая](http://rsdn.ru/forum/dotnet/4024505.aspx) Владимира Решетникова на rsdn, можно обнаружить, что существует ещё один *attribute-target-specifier*, не перечисленный в грамматике C#, который компилятор воспринимает без warning’а:
+As a result, `typeof(Foo).IsSerializable == false` at runtime. However, [a post by Vladimir Reshetnikov on RSDN](http://rsdn.ru/forum/dotnet/4024505.aspx) points out another *attribute-target-specifier* that is absent from the grammar but accepted by the compiler without a warning:
 
 ```c#
 [AttributeUsage(AttributeTargets.GenericParameter)]
-sealed class FooAttribute : Attribute { }
+sealed class FooAttribute : Attribute;
 
-sealed class Bar<[typevar: Foo] T> { }
-
+sealed class Bar<[typevar: Foo] T>;
 ```
 
-Знакомьтесь, скрытый *attribute-target-specifier* - `typevar`. Применение атрибута где-либо вне типа-параметра (если убрать `[AttributeUsage]`) будет результировать предупреждением *CS0658*.
+The unlisted attribute target is `typevar`. It applies to generic type parameters. Using this target anywhere else, even after removing `[AttributeUsage]` from the attribute definition, produces warning *CS0658*.
 
-Компилятор F# более строг и использование произвольных *attribute-target* не позволяет вовсе.
+The F# compiler is stricter: it rejects arbitrary attribute target names altogether.

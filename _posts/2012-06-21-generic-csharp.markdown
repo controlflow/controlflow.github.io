@@ -1,23 +1,23 @@
 ---
 layout: post
-title: "Привет из 2001 года: Generic C# specification"
+title: "A look back at 2001: the Generic C# specification"
 date: 2012-06-21 11:12:00
 author: Aleksandr Shvedov
 tags: csharp fsharp generics types typesystems clr
 ---
-Совсем недавно товарищ Don Syme [выложил в своём блоге](http://blogs.msdn.com/b/dsyme/archive/2012/06/19/clr-c-generics-history-the-generic-csharp-draft-from-the-msr-cambridge-team.aspx) привет из далёкого прошлого Microsoft Research - драфт спецификации research-языка GC# (*Generic C#*) от 12 декабря 2001 года. Не сложно догадаться, что этот язык был дополнением к уже существующему тогда языку C# 1.0, добавляющим в поддержку параметрического полиморфизма.
+Don Syme recently [published a piece of Microsoft Research history on his blog](https://dsyme.net/2012/06/19/some-history-2001-gc-research-project-draft-from-the-msr-cambridge-team/): a draft specification for the research language GC# (*Generic C#*), dated December 12, 2001. It extended the C# 1.0 language with parametric polymorphism. A [local copy of the specification (PDF)]({{ site.baseurl }}/assets/docs/generic-csharp-specification-2001-12-12.pdf) is preserved here as well.
 
-Спецификация интересна тем, что достаточно существенно отличается от C# 2.0, в которым reified generics допилили до production-состояния и отгрузили разработчикам - можно задуматься над теми или иными design decisions, которые привели разработчиков C# к тому языку, какой мы имеем сейчас. Вот что я нашёл интересного:
+The draft differs substantially from C# 2.0, which brought reified generics into production. Comparing them offers a useful view of the design decisions that shaped the language. Here are the details that caught my attention.
 
-* В спецификации GC# фигурировала фича, позволяющая `using`-алиасам иметь собственные типы-параметры:
+* GC# proposed allowing `using` aliases to declare their own type parameters:
 
 ```c#
 using IntDict<T> = System.Collections.Generic.Dictionary<int, T>;
 ```
 
-К сожалению, она не была реализована в GC# и не материализовалась в C# 2.0, но практически идентичный механизм существует сейчас в `type`-алиасах F#. На мой взгляд это мелкая и полезная фича, но не особо нужная в виду некоторой общей ущербности `using`-алиасов в C#.
+This was never implemented in GC# and did not make it into C# 2.0, although F# has a very similar feature in its type abbreviations. It would be a small but useful addition, even within the limited role of `using` aliases in C#.
 
-* Generic-типы не могли быть “перегружены” по числу типов-параметров. Все generic-типы имели простой суффикс “`G`" в метаданных, поэтому такой код раньше не компилировался из-за конфликта имён:
+* Generic types could not be overloaded by their number of type parameters. The metadata naming scheme gave generic types a fixed suffix rather than encoding their arity, so these declarations conflicted:
 
 ```c#
 class C { }
@@ -25,49 +25,54 @@ class C<T> { }
 class C<T, U> { }
 ```
 
-Однако GC# не предусматривал такого же ограничения в перегрузке generic-методов. В C# 2.0 такой код компилируется, так как классы получат в метаданных имена `C`, ``C`1`` и ``C`2`` соответственно. Я всячески поддерживаю ослабление этого ограничения, так как в существовании одноимённых классов с разным количеством типов-параметров нет ничего криминального, более того - это иногда удобно разработчикам framework’ов.
+GC# did not impose the same restriction on generic method overloads. C# 2.0 accepts the type declarations above because their metadata names are `C`, ``C`1``, and ``C`2``. Removing the restriction was a good decision: types with the same name and different arities can be useful, particularly in framework APIs.
 
-* Выражение получения значения по-умолчанию для типа `T` имело немного другой синтаксис: `default<T>`.
+* The expression for the default value of a type parameter `T` used a different syntax: `default<T>`.
 
-* В GC# качестве типов-аргументов могли выступать другие constructed-типы или типы-параметры, а так же специальный тип-аргумент `void`. Однако это не было реализовано из-за ограничений GCLR (*Generic CLR* - так называлась версия CLR с  экспериментальной поддержкой *reified generics*), связанных с особым трактованием типа `void` на уровне MSIL-кода. Реализовать поддержку использования `void` в качестве типов-аргументов можно было бы путём использования специального пустого типа-значения `System.Empty`, на который компилятор прозрачно бы подменял типы-аргументы `void` (похожим образом это сейчас реализовано в F#).
+* Besides constructed types and type parameters, GC# proposed allowing `void` as a special type argument. This was not implemented because GCLR (*Generic CLR*, the experimental runtime with reified generics) retained the special treatment of `void` in IL. One suggested implementation was to have the compiler transparently replace `void` type arguments with an empty value type, `System.Empty`, playing a role similar to F#'s `unit`.
 
-С помощью типа-аргумента `void` можно было бы делать такой “финт ушами” при переопределении методов из базовых generic-классов:
+A `void` type argument would allow an override such as this:
 
 ```c#
-class C<T> {
-  public virtual T M() { ... }
+class C<T>
+{
+  public virtual T M() { … }
 }
 
-class D : C<void> {
-  public override void M() { ... }
+class D : C<void>
+{
+  public override void M() { … }
 }
 ```
 
-Пример выше предлагалось транслировать в подобный код (это не совсем валидный C# из-за переопределения виртуального метода с отличающейся областью видимости):
+The proposed translation looked roughly like the following. This is illustrative pseudocode rather than valid C#: among other things, the generated override changes accessibility.
 
 ```c#
-class C<T> {
-  public virtual T M() { ... }
+class C<T>
+{
+  public virtual T M() { … }
 }
 
-class D : C<System.Empty> {
-  private sealed override System.Empty M() {
+class D : C<System.Empty>
+{
+  private sealed override System.Empty M()
+  {
     this.M();
     return new System.Empty();
   }
-  public new virtual void M() { ... }
+  public new virtual void M() { … }
 }
 ```
 
-Подобную трансформацию предполагалось делать и в случаях приведения метод-групп с возвращаемым значением типа `void` к constructed-типам generic-делегатов, когда в результате подстановки типа-аргумента тип возвращаемого значения делегата становился типом `viod` - должны были неявно генерироваться обёртки, иногда и вовсе включающие в себя замыкания.
+Similar adaptations were proposed when converting a method group returning `void` to a constructed generic delegate type whose return type became `void` after substitution. The compiler would generate wrapper methods, sometimes involving closures.
 
-Насколько я понял, похожая история должна была происходить с параметрами, тип которых становился типом `void` после подстановки типов-аргументов - `void`-параметры должны были “исчезать” из списков параметров, а компилятор должен был позаботиться о неявной передаче пустой структуры `System.Empty` в скрытые параметры.
+As I understand the proposal, parameters whose types became `void` after substitution would disappear from the source-level parameter list. The compiler would supply `System.Empty` values for the corresponding hidden parameters.
 
-Самый главный вопрос - зачём всё это безобразие может понадобиться? Существование `unit`-типа, такого как `void`, могло бы убрать необходимость в существовании отдельных групп делегатов `Action<T>` и `Func<T, TResult>`. Тип делегатов `Action<T>` прекрасно бы выражался как `Func<T, void>`, что сократило бы вдвое количество перегрузок в некоторых местах .NET Framework, активно пользующихся данными типами делегатов; не было бы отдельных типов `Task` и `Task<T>` и т.д. Однако, при создании таких делегатов с `void` мы получали бы небольшой оверхэд из-за оборачивания делегатов.
+Why go to this trouble? Treating `void` as a unit type could remove the need for separate `Action<T>` and `Func<T, TResult>` delegate families: `Action<T>` could be expressed as `Func<T, void>`. This would eliminate many paired overloads in APIs that use both families. Likewise, separate `Task` and `Task<T>` types might not be needed. With the proposed compiler translation, however, creating these delegates would incur some wrapper overhead.
 
-Если бы CLR изначально представляла тип `void` в виде такой пустой структуры, на которую действовали бы все правила, действующие на обычные значения на MSIL-стеке, то эта фича натурально бы выражалась и никаких обёрток/хаков не потребовалось бы. Не смотря на то, что язык MSIL при добавлении generics пришлось существенно изменять и дополнять, поведение `void` оставили прежним и поддержку типа-аргумента `void` реализовывать не стали, что немного грустно, но совсем немного.
+If the CLR had represented `void` as an ordinary empty value type from the beginning, with the usual rules for values on the IL evaluation stack, the feature could have fit naturally without those wrappers. Adding generics required substantial IL changes, but the treatment of `void` remained unchanged, and support for `void` type arguments was dropped.
 
-* В GC# планировалось ввести ограничение на уникальность реализуемых интерфейсов, запрещающее реализацию одного интерфейса несколько раз с разными типами-параметрами, но оно так и не было реализовано и отсутствует в C# 2.0:
+* GC# proposed an interface-uniqueness restriction that would prevent a class from implementing the same generic interface with different type arguments. It was never implemented, and C# 2.0 has no such blanket restriction:
 
 ```c#
 interface I<T> { }
@@ -75,109 +80,117 @@ class C : I<string>, I<object> { }
 
 ```
 
-* В GC# статические поля не могли ссылаться на типы-параметры определяющего их класса, такой код не компилировался:
+* Static fields in GC# could not refer to type parameters of their declaring class. These declarations were rejected:
 
 ```c#
-class C<T> {
-  static T Field;
-  static List<T> Xs;
+class C<T>
+{
+  private static T Field;
+  private static List<T> Xs;
 }
 
 ```
 
-Причина такого жёсткого ограничения проста - на тот момент реализация GCLR шарила статические переменные между всеми constructed-типами данного generic-класса (как в Java, но там из-за type erasure и отсутствия поддержки средой исполнения). К моей большой радости, к выходу C# 2.0 среду исполнения допилили и статика стала выделяться отдельно на каждое инстанцирование generic-класса конкретными типами-аргументами.
+The reason was straightforward: GCLR shared static fields among all constructed types of a generic class. Java has a similar restriction, though there it follows from type erasure and the absence of runtime generic instantiations. By C# 2.0, the CLR allocated separate static fields for each closed constructed type.
 
-Я считаю это изменение очень удобным и логичным поведением, однако есть достаточно большая доля разработчиков, не знающих об этом эффекте и непреднамеренно инициализирующих одну и ту же статику во множестве constructed-типов идентичными значениями.
+I find this behavior useful and consistent. It can still surprise developers who are unaware of it and unintentionally initialize identical static data separately for many constructed types.
 
-По-умолчанию ReSharper ругается на поля в generic-типах если в типе поля не встречаются типы-параметры, что мне не очень нравится, но и вычисление зависимости значения поля от типа-параметра в общем случае просто невозможно, так что я смирился.
+By default, ReSharper warns about static fields in generic types when the field's type does not mention any type parameters. I am not especially fond of that heuristic, but determining whether the field's value depends on a type parameter is not generally possible.
 
-* Практически аналогичная история со статическими методами (а так же статическими свойствами и статическими событиями), такой код был под запретом:
+* A similar restriction applied to static methods, properties, and events. The following was not allowed:
 
 ```c#
-class C<T> {
-  public static M(C<T> c) { }
+class C<T>
+{
+  public static void M(C<T> c) { }
 }
 ```
 
-Причина этого ограничения мне особо не ясна, так как GCLR уже умел передавать типы-аргументы в статические generic-методы (которыми спецификация GC# и рекомендовала пользоваться для того, чтобы обойти случай, приведённый выше). Возможно, это связанно с тем же в шарингом статических данных между constructed-типами или в каком-нибудь заковыристом случае становилось неоткуда материализовать типы-аргументы. Ограничение не действовало на методы уровня экземпляра потому что они всегда имели доступ к reified набору типов-аргументов через `vtbl` объекта.
+The reason is less clear to me. GCLR could already pass type arguments to static generic methods, which the GC# specification recommended as a workaround. Perhaps the restriction was related to shared static data, or to a case where the runtime could not recover the class's type arguments. Instance methods did not have this problem: they could obtain the reified type arguments through the object's runtime type information.
 
-Сейчас такой код в C# работает за счёт того, что система исполнения неявно передаёт типы-аргументы статическому методу через скрытый параметр (в случае, когда все типы-аргументы являются ссылочными типами) или вовсе компилирует специализации статического метода для конкретных типов-аргументов (в случае, когда в типах-аргументах присутствует хотя бы один тип-значение). Очень хорошо, что таких ограничений не осталось и нынешнее поведение C# 2.0 понятно и ожидаемо.
+The production CLR can supply generic context to shared static-method code through a hidden argument, and generate specialized code for value-type instantiations. The restriction disappeared, leaving the more consistent behavior available in C# 2.0.
 
-Помимо этого, данное ограничение GC# делало невозможным определение операторов для generic-типов, поэтому разработчики вынуждены были разрешить определять generic-операторы (при этом приходилось рассчитывать на вывод типов, так как указывать такие типы-параметры явно было вовсе невозможно), что ушло в прошлое вместе с GC#:
+The GC# restriction also interfered with operators on generic types, since operators are static methods. The proposed workaround was to allow generic operators. Their type arguments would have to be inferred because operator syntax provides nowhere to specify them explicitly. This feature disappeared along with the original restriction:
 
 ```c#
-public C<T> {
-  public static C<T> operator+ <T> (C<T> lhs, C<T> rhs) { .. }
+public class C<T>
+{
+  public static C<T> operator+ <T> (C<T> lhs, C<T> rhs) { … }
 }
 
 ```
 
-* Типы-параметры классов не становились неявно типами-параметрами nested-классов в GC#:
+* In GC#, an enclosing class's type parameters did not implicitly become type parameters of its nested classes:
 
 ```c#
-class C<T> {
-  class N    { /* нельзя ссылаться на N */ }
-  class N<T> { /* но можно сделать так */ }
+class C<T>
+{
+  private class N    { /* Cannot refer to the outer T. */ }
+  private class N<T> { /* Can declare its own T. */ }
 }
 ```
 
-Сейчас в C# классы из примера выше компилируются в метаданные как ``C`1``, ``C+N`1`` и ``C+N`2`` - то есть nested-классы компилируются в обычные классы с типами-параметрами от всех внешних generic-классов. Это не более чем синтаксический сахар компилятора для того, чтобы избежать дублирований типов-параметров в nested-классах, однако он вводит понятие области видимости типов-параметров и вероятность перекрытия имён типов-параметров (как в примере выше). Однако в C# 2.0 стало невозможно создать не обобщённые nested-классы внутри generic-классов, что может иногда мешать. Лично я всё же уверен, что подход с неявными типами-параметрами всё же лучше, хоть и сложнее для поддержки IDE, например.
+In C# 2.0, nested types carry the type parameters of their enclosing generic types as well as any they declare themselves. The reflected names in this example are ``C`1``, ``C`1+N``, and ``C`1+N`1``; the nested types have one and two generic parameters respectively. This avoids repeating the enclosing parameters, but introduces scope and shadowing rules: the inner `T` in `N<T>` hides the outer `T`. It also means that a nested type inside a generic class cannot be completely independent of the outer type's instantiation. Despite that tradeoff, I prefer the implicit approach, even though it makes IDE support more involved.
 
-* Я не сразу это осознал, но в GC# у делегатов планировалось сделать два набора типов-параметров (но конечно не было реализовано):
+* One proposal took me a while to notice: delegates could have two sets of type parameters. This was never implemented:
 
 ```c#
 delegate void Foo <T><U>(T t, U u);
 ```
 
-Первые - *delegate-create-type-parameters* - это обычные типы-параметры, которые мы имеем сейчас в C#.
+The first set, called *delegate-create-type-parameters*, corresponds to ordinary generic delegate type parameters in C#.
 
-Вторые - *delegate-invoke-type-parameters* - это фактически типы-параметры метода `Invoke`, типы-параметры отложенные до вызовов делегата! Фактически, определение делегата выше было эквивалентно классу:
+The second set, *delegate-invoke-type-parameters*, belongs to the `Invoke` method itself. These type arguments would be supplied when invoking the delegate, rather than when creating it. Conceptually, such a delegate would behave like this class:
 
 ```c#
-class Printer<T> {
+abstract class Printer<T>
+{
   public abstract void Invoke<U>(T t, U u);
 }
 ```
 
-С помощью таких делегатов можно было бы очень легко изобразить *rank-2 types*, можно было бы разрешить анонимные generic-методы/лямбды, передавать в методы полиморфные делегаты печати на экран значений типа `T` и там их вызывать с разными типами-параметрами (распространённый троллинг языков с классическими системами типов) и творить прочие замечательные безобразия! Делегаты планировалось сделать не менее мощными, чем абстрактный generic-метод в generic-классе, однако этого не произошло. Пример использования:
+This could express *rank-2 polymorphism*: a method could accept a delegate and invoke it with several different types. It could also provide a basis for generic anonymous methods or lambdas. The aim was to make a delegate as expressive as an abstract generic method on a generic class. For example:
 
 ```c#
 delegate void Printer<T><U>(T t, U u);
 
-class Program {
-  public void PrintGeneric<U>(int padding, U u) { ... }
-  public void PrintValues(Printer<int> printer) {
+class Program
+{
+  public void PrintGeneric<U>(int padding, U u) { … }
+  public void PrintValues(Printer<int> printer)
+  {
     printer(100, 123);
     printer(100, "abc");
     printer(100, true);
   }
 
-  public void Run() {
+  public void Run()
+  {
     PrintValues(PrintGeneric);
   }
 }
 ```
 
-Я думаю, что такие делегаты не случились потому, что пришлось бы допиливать среду исполнения и потому что правила приведения методов к таким делегатам - просто ад, с трудом поддающийся пониманию.
+My guess is that the runtime work and the complexity of method-group conversion rules helped keep this proposal from reaching the final language.
 
-* В GC# в ограничениях типов-параметров не было constraint’ов `struct`, `class` и `new()`, а так же subtype-ограничений, в которых участвовали другие типы параметры (обратите внимание на синтаксис):
+* GC# had no `struct`, `class`, or `new()` constraints. It also prohibited subtype constraints referring to another type parameter. Note the proposed constraint syntax:
 
 ```c#
-class C<T, U | T : U> { ... } // ошибка в GC#
+class C<T, U | T : U> { … } // Invalid in GC#.
 ```
 
-Я считаю эти ограничения на типы-параметры натуральными костылями (ужасный `new()`, работающий через рефлексию) и небольшими вынужденными уродствами системы типов C#/CLR, появившимся в следствии различных особенностей поведения reified generics. Мне кажется, что можно было бы как-нибудь подумать и вовсе обойтись без ограничений `class`/`struct`, а вот ограничение другим типом-параметром - редкая, но интересная возможность.
+I see some of these constraints as compromises arising from the C#/CLR type system and the implementation of reified generics. The reflection-based implementation of `new()` was a particular frustration. I wonder whether a different design could have avoided separate `class` and `struct` constraints. Constraints involving another type parameter, though uncommon, are an interesting capability.
 
-* В GC# планировали сделать вывод типов-параметров конструкторов и даже конструкторов делегатов (но не было реализовано) по типам параметров. Эту фичу уже много где обсуждали, можно было бы опускать явные типы-аргументы во многих случаях вызовов конструкторов generic-классов:
+* GC# also proposed inferring a constructed type's type arguments from constructor arguments, including delegate constructors. This was not implemented. It could have removed explicit type arguments from calls such as these:
 
 ```c#
-int F(int x) { ... }
-int G(int x) { ... }
+private int F(int x) { … }
+private int G(int x) { … }
 var f = new Func(x => F(x) + G(y)); // Func<int, int>
 var xs = new List(someIntEnumerable); // List<int>
 
 ```
 
-Я считаю это безусловно полезной и достаточно легко реализуемой фичей, однако в C# её до сих пор нет. Единственный недостаток, который я здесь вижу - в некоторых случаях необходимо будет производить overload resolution между группами конструкторов абсолютно разных классов (подумайте, что будет если в примере выше будут одновременно существовать классы `List` и `List<T>`, имеющие подходящие для вызова конструкторы).
+This seems useful and reasonably straightforward to implement, but it is still absent from C# at the time of writing. One complication is overload resolution across constructors of entirely different types: consider what would happen if both `List` and `List<T>` had constructors applicable to the final call above.
 
-На этом всё, в спецификации можно найти ещё небольшие интересные design choices, о которых мне стало лень писать. Надеюсь, было интересно ;)
+The specification contains more small design choices worth exploring. Even the proposals that were dropped help explain why generics in C# and the CLR took their eventual form.

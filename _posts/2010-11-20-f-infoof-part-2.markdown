@@ -1,16 +1,17 @@
 ---
 layout: post
-title: "F# infoof (part 2)"
+title: "F# infoof operator (part 2)"
 date: 2010-11-20 04:46:00
 author: Aleksandr Shvedov
 tags: fsharp infoof pattern-matching patterns quotations
 ---
-Итак, следующей задачей будет являться написание функции `methodof`, возвращающей экземпляр `System.Reflection.MethodInfo` по выражению вызова (и не только) метода или функции. На этот раз подробно этапы разработки я приводить не буду, лишь продемонстрирую, как цитируются те или иные использования методов типов и функций модулей. Для этого определим следующий тип и модуль:
+The next task is to write `methodof`, which returns a `System.Reflection.MethodInfo` from an expression referring to a method or function, including a call expression. Rather than tracing every implementation step, we'll examine how F# quotes the different ways of using type members and module functions. First, define a type and a module:
 
 ```fsharp
 type Foo() =
   static member StaticM() = ()
   member this.InstanceM() = ()
+  member this.WithArgumentM(x: int) = x
   member this.OverloadedM(_: int) = ()
   member this.OverloadedM(_: string) = ()
   member this.OverloadedM(_: int, _: int) = ()
@@ -23,7 +24,7 @@ module Bar =
   let generic x = x
 ```
 
-И попробуем процитировать вызовы:
+Here are quotations for several calls:
 
 ```fsharp
 let foo = Foo()
@@ -50,7 +51,7 @@ let foo = Foo()
       [Value 1, Value 2, Value 3, Value 5, Value 6, Value 7])
 ```
 
-Тут вроде всё понятно, основа всех вызовов – образец `Call()`. Однако нам приходится указывать хоть какие-нибудь параметры, для того чтобы процитировать вызов, а реально это может потребоваться только если метод перегружен и требуется типами аргументов подсказать компилятору конкретную перегрузку. Однако можно не указывать аргументы вовсе и тогда F# будет трактовать метод/функцию как значение функционального типа. Посмотрим, как цитируются такие значения:
+Each call is represented by a `Call` node. To quote a call, however, we have to supply arguments, even when their values are irrelevant to obtaining the method's metadata. Arguments are useful when their types select a particular overload, but otherwise we can omit them and let F# treat the method or function as a function value. Here is how those values are quoted:
 
 ```fsharp
 <@ Foo.StaticM @>
@@ -91,7 +92,7 @@ let foo = Foo()
                          [a, b, c, x, y, z])))))))))
 ```
 
-То есть F# генерирует лямбда-выражение, оборачивающее вызов исходного метода/функции (или несколько вложенных лямбда-выражений, если исходная функция содержит аргументы в каррированной форме). Опознавать такие конструкции нетривиально, поэтому в пространстве имён `Microsoft.FSharp.Quotations` есть модуль `DerivedPatterns`, содержащий активный образец `Lambdas`:
+F# generates a lambda that wraps the original method or function call, or several nested lambdas when the function has curried arguments. Recognizing these structures directly is more involved, so the `DerivedPatterns` module in `Microsoft.FSharp.Quotations` provides the `Lambdas` active pattern:
 
 ```fsharp
 let (DerivedPatterns.Lambdas(args, body)) = <@ Bar.mixed @>;;
@@ -102,24 +103,24 @@ val body : Expr =
       [a, b, c, x, y, z])
 ```
 
-Теперь осталось лишь проверить список списков аргументов лямбды (`[[a; b; c]; [x; y]; [z]]`) на соответствие списку параметров при вызове в теле самой вложенной лямбды (`[a, b, c, x, y, z]`). В качестве упражнения очень советую попробовать реализовать активный образец `DerivedPatterns.Lambdas` самостоятельно - это достаточно увлекательная задача.
+We can now compare the flattened list of lambda parameters (`[[a; b; c]; [x; y]; [z]]`) with the variables passed to the call in the innermost body (`[a; b; c; x; y; z]`). Implementing an active pattern equivalent to `DerivedPatterns.Lambdas` is a useful exercise in working with quotation trees.
 
-В итоге можно реализовать вспомогательный активный образец `Func`, совпадающий с описанными выше функциональными значениями, сгенерированными F# из методов и функций. При этом необходимо учесть, что для методов, не имеющих параметров вовсе, генерируются лямбда-выражения с аргументом типа `unit`:
+Using this pattern, we can define a helper active pattern named `Func` that recognizes the function values F# generates from methods and functions. It must also account for parameterless methods, which are wrapped in lambdas taking a `unit` argument:
 
 ```fsharp
 let (|Func|_|) expr =
   let onlyVar = function Var v -> Some v | _ -> None
   match expr with
-    // функ.значения без аргументов
+    // Function values for methods with no parameters.
     | Lambda(arg, Call(target, info, []))
         when arg.Type = typeof<unit> -> Some(target, info)
 
-    // функ.значения с одним аргументом
+    // Function values with one argument.
     | Lambda(arg, Call(target, info, [ Var var ]))
         when arg = var -> Some(target, info)
 
-    // функ.значения с набором каррированных
-    // или взятых в кортеж аргументов
+    // Function values with curried
+    // or tupled arguments.
     | Lambdas(args, Call(target, info, exprs))
         when List.choose onlyVar exprs
            = List.concat args -> Some(target, info)
@@ -127,28 +128,28 @@ let (|Func|_|) expr =
     | _ -> None
 ```
 
-Активный образец возвращает пару из экземпляра, чей метод вызывается и экземпляр `MethodInfo` этого метода/функции, при этом активный образец может не совпасть вовсе (об этом свидетельствует `|_|` в конце имени активного образца).
+The active pattern returns a pair containing the optional receiver expression and the method's `MethodInfo`. This is a partial active pattern: the trailing `|_|` in its name means that it can fail to match, in which case it returns `None`.
 
-Теперь достаточно легко определить функцию `methodof`, учитывая проблему со скрытыми `let`-выражениями, рассмотренную в первом посте этой серии:
+We can now define `methodof`, also handling the implicit `let` bindings discussed in the first post:
 
 ```fsharp
 let methodof expr =
   match expr with
-    // любые обычные вызовы: foo.Bar()
+    // Ordinary calls: foo.Bar()
     | Call(_, info, _) -> info
 
-    // вызовы и функ.значения через аргумент лямбды:
+    // Calls and function values through a lambda parameter:
     // fun (x: string) -> x.Substring(1, 2)
     // fun (x: string) -> x.StartsWith
     | Lambda(arg, Call(Some(Var var), info, _))
     | Lambda(arg, Func(Some(Var var), info))
           when arg = var -> info
 
-    // любые функциональные значения:
+    // Function values:
     // someString.StartsWith
     | Func(_, info) -> info
 
-    // вызовы и функ.значения через экземпляры:
+    // Calls and function values through instance expressions:
     // "abc".StartsWith("a")
     // "abc".Substring
     | Let(arg, _, Call(Some (Var var), info, _))
@@ -158,7 +159,7 @@ let methodof expr =
     | _ -> failwith "Not a method expression"
 ```
 
-И тут возникает один нюанс: такой `methodof` не всегда работает, если на вход подаётся выражение значения функционального типа, созданного из перегруженного метода:
+There is one complication when a function value is created from an overloaded method: the compiler may not have enough information to choose an overload. For example:
 
 ```fsharp
 let foo = Foo()
@@ -171,20 +172,20 @@ methodof<@ foo.OverloadedM @>
 > Possible overload: 'member Foo.OverloadedM : string -> unit'.<br/>
 > Possible overload: 'member Foo.OverloadedM : int -> unit'.
 
-Компилятору можно подсказать, явно типизируя выражение функционального типа:
+An explicit function type annotation resolves the ambiguity:
 
 ```fsharp
 methodof<@ foo.OverloadedM : string -> unit @>
 ```
 
-При этом возможно частично не указывать типы, если это не будет мешать компилятору F# выбирать требуемую перегрузку (иногда достаточно указать только, что аргумент функционального типа является кортежем из *n* елементов, где *n* - количество параметров исходного метода, см. второй пример):
+Parts of the type can be left unspecified when the remaining information is enough to select the overload. Sometimes it is sufficient to specify a tuple with the right number of elements, corresponding to the method's parameter count, as in the second example:
 
 ```fsharp
 methodof<@ foo.OverloadedM : string -> _ @>
 methodof<@ foo.OverloadedM : _ * _  -> _ @>
 ```
 
-Заодно определим функцию `methoddefof`, возвращающую *generic method definition* любого обобщённого метода/функции, реализация тривиальна:
+We can also define `methoddefof`, which returns the *generic method definition* of a generic method or function:
 
 ```fsharp
 let methoddefof expr =
@@ -193,7 +194,7 @@ let methoddefof expr =
     | info -> failwithf "%A is not generic" info
 ```
 
-Итак, проверяем:
+Here are examples of the supported forms:
 
 ```fsharp
 [ methodof<@ Console.ReadLine @>
@@ -223,7 +224,7 @@ let methoddefof expr =
 |> List.iter (printfn "%A")
 ```
 
-Выводит на экран:
+The output is:
 
     String ReadLine()
     String ReadLine()
@@ -253,4 +254,4 @@ let methoddefof expr =
     IEnumerable`1[TResult]
         Map[T,TResult](FSharpFunc`2[T,TResult], IEnumerable`1[T])
 
-Всё работает, катаемся! В следующем посте попробуем собрать всё это дело воедино…
+The next post will cover `eventof` and how F# represents event access in quotations. We will then bring all the helpers together into a complete module in the final post.

@@ -8,13 +8,9 @@ tags: csharp serialization surrogate yield
 I needed to serialize a C# iterator. The obstacle is that the C# compiler does not mark its generated iterator classes with `[Serializable]`. The same applies to the closure classes generated for lambdas and anonymous methods. The corresponding F# types do not have this restriction:
 
 ```fsharp
-let xs =
-    seq
-        {
-            yield 1
-        }
-
+let xs = seq { yield 1 }
 xs.GetType().IsSerializable // true
+
 id.GetType().IsSerializable // true
 ```
 
@@ -27,7 +23,7 @@ using System.Runtime.Serialization;
 
 sealed class AnySurrogate : ISerializationSurrogate
 {
-  const BindingFlags AllFields =
+  private const BindingFlags AllFields =
     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
   public void GetObjectData(object obj, SerializationInfo info, StreamingContext context)
@@ -35,10 +31,7 @@ sealed class AnySurrogate : ISerializationSurrogate
     Type objType = obj.GetType();
     foreach (var field in objType.GetFields(AllFields))
     {
-      info.AddValue(
-        field.Name,
-        field.GetValue(obj),
-        field.FieldType);
+      info.AddValue(field.Name, field.GetValue(obj), field.FieldType);
     }
   }
 
@@ -84,7 +77,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 
 class Foo
 {
-  static IEnumerator Bar()
+  private static IEnumerator Bar()
   {
     var now = DateTime.Now;
 
@@ -92,7 +85,7 @@ class Foo
     yield return now.Ticks;
   }
 
-  static void Main()
+  private static void Main()
   {
     var e1 = Bar();
 

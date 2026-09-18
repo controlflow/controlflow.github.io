@@ -195,7 +195,7 @@ person.set_Age(person.get_Age() + 1);
 It seems great that this works — after all, that’s what a high-level language is supposed to do: hide low-level implementation details, such as properties being method calls. The problem is that C# has another source of simultaneous read/write usage — `ref` parameters:
 
 ```c#
-void M(ref int x)
+private void M(ref int x)
 {
   x += 42;
 }

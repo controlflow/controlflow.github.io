@@ -15,7 +15,7 @@ using System.Reflection.Emit;
 public abstract class Foo {
   public abstract Foo Bar();
 
-  static void Main() {
+  private static void Main() {
     // create a dynamic assembly with a module
     var dynAssembly = AppDomain.CurrentDomain
       .DefineDynamicAssembly(
@@ -64,7 +64,7 @@ using System;
 // got `string Method(object)`
 Func<string, object> func = Method; // compiles fine!
 
-string Method(object arg) { return arg.ToString(); }
+private string Method(object arg) { return arg.ToString(); }
 ```
 
 p.s. Covariant return type overrides later appeared in C# 9.0 and .NET 5 runtime, 11 years later after this post was published.

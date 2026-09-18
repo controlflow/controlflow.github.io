@@ -1,61 +1,66 @@
 ---
 layout: post
-title: "Мемоизация функций с помощью аспекта PostSharp"
+title: "Memoizing functions with a PostSharp aspect"
 date: 2010-12-19 14:29:00
 author: Aleksandr Shvedov
 tags: csharp postsharp aop memoize aspect
 ---
-Недавно поставил поиграться [PostSharp](http://www.sharpcrafters.com/) 2.0, стало интересно посмотреть на инфраструктуру и возможности, оценить API определения аспектов и удобство отладки. Лично на меня впечатление PostSharp произвёл сугубо положительное (не смотря на community edition, различий от полной платной версии минимум), установился просто, для использования достаточно лишь добавить в проект ссылку на `PostSharp.dll`.
+I recently tried [PostSharp](http://www.sharpcrafters.com/) 2.0 to explore its infrastructure, aspect APIs, and debugging experience. My first impression was positive: installation was straightforward, the Community Edition covered what I needed, and using it in a project required only a reference to `PostSharp.dll`.
 
-В качестве задачи я выбрал мемоизацию функций, так как единственный [пример](http://dpatrickcaldwell.blogspot.com/2009/02/memoizer-attribute-using-postsharp.html) в Сети оказался очень уныл (как можно было вообще догадаться клеить строковое представление всех аргументов в одну строку и использовать её как ключ словаря) и в задаче есть пространство для интересных оптимизаций.
+I chose function memoization as an exercise. The [example](http://dpatrickcaldwell.blogspot.com/2009/02/memoizer-attribute-using-postsharp.html) I found online concatenated the string representations of all arguments into a dictionary key. I wanted an implementation that preserved argument types and left room for different caching strategies.
 
-Аспекты PostSharp на самом деле являются классами, унаследованными от класса `System.Attribute`, то есть обычными атрибутами. Инфраструктура PostSharp предлагает вам несколько базовых классов, таких как:
+PostSharp aspects are classes derived from `System.Attribute`: ordinary attributes with additional behavior. PostSharp provides several base classes, including:
 
-* `MethodInterceptionAspect` - перехват вызовов методов;
-* `LocationInterceptionAspect` - перехват обращений к свойствам и полям;
-* `OnMethodBoundaryAspect` - перехват моментов входа и выхода из метода;
-* `OnExceptionAspect` - перехват вызовов методов, выбросивших исключение;
-* `EventInterceptionAspect` - перехват подписки на события.
+* `MethodInterceptionAspect` — intercepts method calls;
+* `LocationInterceptionAspect` — intercepts access to properties and fields;
+* `OnMethodBoundaryAspect` — runs code at method entry and exit;
+* `OnExceptionAspect` — handles exceptions thrown by methods;
+* `EventInterceptionAspect` — intercepts event subscriptions.
 
-Мы будем перехватывать вызовы методов. Кроме того, сразу следует обратить внимание, что у аспектов есть время жизни - бывают аспекты уровня типа и уровня экземпляра. По умолчанию, аспекты унаследованные от `MethodInterceptionAspect` являются аспектами уровня типа, а это приведёт к тому, что если мы применим мемоизацию к методу экземпляра, то кэш аргументов и возвращаемых значений будет один на все экземпляры - это скорее всего не верно (будем считать что `this` - это обычный аргумент метода и он должен участвовать в поиске по кэшу), поэтому наш аспект должен быть уровня экземпляра. Для этого следует реализовать им интерфейс `IInstanceScopedAspect` (тогда экземпляр аспекта будет создаваться при создании экземпляра класса, на метод экземпляра которого применён аспект). Итак:
+We need to intercept method calls, but we must also choose the aspect's lifetime. Aspects can be scoped to a type or to an instance. By default, an aspect derived from `MethodInterceptionAspect` is scoped to the type. Applied to an instance method, it would share one argument/result cache across all instances. That is usually incorrect: `this` is effectively another input to the method. Implementing `IInstanceScopedAspect` gives each object its own aspect instance and therefore its own cache:
 
 ```c#
 /// <summary>
-/// Аспект, производящий мемоизацию метода, отмечаемого данным
-/// атрибутом. Методы с ref-/out-параметрами не поддерживаются.
+/// Memoize the method marked with this attribute.
+/// Methods with ref or out parameters are not supported.
 /// </summary>
 [Serializable, AttributeUsage(AttributeTargets.Method)]
 public sealed class MemoizeAttribute : MethodInterceptionAspect, IInstanceScopedAspect
 {
-    // Указывает, должен ли метод корректно поддерживать работу в многопоточной среде.
+    // Select the concurrent cache implementation.
     public bool IsThreadSafe { get; set; }
 ```
 
-Обратите внимание, что все аспекты PostSharp (и вложенный определния классов) должны быть отмечены атрибутом `[Serializable]`. Свойство `IsThreadSafe` становится обычным именованным параметром атрибута и позволит пользователю запрашивать поддержку корректной работы мемоизации в многопоточной среде. Реализовать поддержку `ref`-/`out`-параметров возможно, но не хотелось бы нетривиально усложнять реализацию в данном посте, поэтому от их поддержки просто откажемся.
+PostSharp aspects and their nested cache classes must be marked `[Serializable]`. The `IsThreadSafe` property becomes a named attribute argument, allowing callers to request the concurrent cache implementation. Supporting `ref` and `out` parameters would make the example substantially more complex, so they are outside its scope.
 
-Вот только как контролировать использование атрибута и не позволять применять его на методы, для которых он не имеет смысла (методы без возвращаемого значения или вовсе без параметров)? Специально для этого в PostSharp предусмотрен виртуальный метод `CompileTimeValidate()`, переопределяя который можно написать свою логику валидации использования атрибута во время компиляции (переопределение данного метода может вернуть `false` и тогда аспект просто не будет применён без сообщений об ошибках):
+We also need to control where the attribute can be used. This implementation requires a return value and at least one parameter. PostSharp provides the virtual `CompileTimeValidate()` method for validating aspect usage during compilation. An override can also return `false` to skip applying the aspect without reporting an error:
 
 ```c#
 /// <summary>
-/// Процедура валидации использования аспекта мемоизации.
+/// Validate usage of the memoization aspect.
 /// </summary>
-public override bool CompileTimeValidate(MethodBase method) {
+public override bool CompileTimeValidate(MethodBase method)
+{
   var mi = (MethodInfo) method;
-  if (mi.ReturnType == typeof(void)) {
+  if (mi.ReturnType == typeof(void))
+  {
     throw new InvalidOperationException(
-      "Аспект следует применять только на методы, возвращающие значение.");
+      "The aspect requires a method that returns a value.");
   }
 
-  var paremeters = mi.GetParameters();
-  if (paremeters.Length == 0) {
+  var parameters = mi.GetParameters();
+  if (parameters.Length == 0)
+  {
     throw new InvalidOperationException(
-      "Аспект следует применять только на методы, имеющие параметры.");
+      "The aspect requires a method with at least one parameter.");
   }
 
-  foreach (var parameter in paremeters) {
-    if (parameter.IsIn || parameter.IsOut) {
+  foreach (var parameter in parameters)
+  {
+    if (parameter.IsIn || parameter.IsOut)
+    {
       throw new InvalidOperationException(
-        "Аспект невозможно использовать с методами, обладающими ref-/out-параметрами.");
+        "The aspect does not support methods with ref or out parameters.");
     }
   }
 
@@ -63,167 +68,187 @@ public override bool CompileTimeValidate(MethodBase method) {
 }
 ```
 
-Единственную проблему здесь создаёт тот факт, что по сообщению об ошибке из PostSharp в Visual Studio невозможно сразу переместиться на место некорректного применения аспекта, что уныло. Вроде функционал для этого есть, но пока не удалось с ним разобрался.
+One inconvenience is that I could not navigate directly from these PostSharp errors in Visual Studio to the invalid attribute usage. There appeared to be an API for better diagnostics, but I had not worked out how to use it.
 
-Теперь немного отвлечёмся от PostSharp и подумаем как будем всё это дело кэшировать. Дело в том, что при перехватывании вызовов методов, PostSharp предоставляет нам доступ к переданным параметрам и возвращаемому значению через слабо типизированные свойства и коллекции класса `MethodInterceptionArgs`, а хранить их хотелось бы в строго типизированном кэше. Давайте соорудим такую штуку:
+Now we can design the cache. PostSharp exposes arguments and return values through the weakly typed `MethodInterceptionArgs` API, while the cache should retain their concrete types. We can start with this abstraction:
 
 ```c#
 [Serializable]
-abstract class MemoCache
+private abstract class MemoCache
 {
   public abstract bool TryResolve(object arg, out object result);
   public abstract void AppendItem(Arguments arg, int index, object result);
 }
 ```
 
-То есть предоставим слабо типизированный интерфейс для извлечения и добавления в кэш. Возникает вопрос - для извлечения из кэша предусмотрен метод, получающим *один* аргумент, а ведь у метода их может быть несколько. Идея в том, что в качестве значений *кэша по первому аргументу* можно хранить *кэши по второму аргументу* и так далее. Данный подход оптимизирует занимаемое место, более производителен (не надо все аргументы складывать в одну структуру и считать её хэш, можно быстрее определить промах кэша) и более благоприятен для многопоточных сред (получается несколько раздельно блокируемых кэшей). Давайте опишем наследника данного класса, параметризованного типами-параметрами:
+The interface uses `object` for lookups and insertions, but `TryResolve` accepts only one argument. To handle methods with several parameters, the cache keyed by the first argument can contain caches keyed by the second, and so on. This avoids building and hashing a composite key for every lookup, permits an early exit when an argument is missing, and distributes concurrent access across separate caches. The next class introduces generic key and value types:
 
 ```c#
 [Serializable]
-abstract class MemoCache<T, TResult> : MemoCache
+private abstract class MemoCache<T, TResult> : MemoCache
 {
-  static readonly Func<MemoCache> NestedCacheFactory;
+  private static readonly Func<MemoCache> NestedCacheFactory;
 
-  static MemoCache() {
-    // если элементами кэша данного типа
-    // являются другие вложенные кэши
-    if (typeof(TResult).IsSubclassOf(typeof(MemoCache))) {
+  static MemoCache()
+  {
+    // Check whether values in this cache
+    // are themselves nested caches.
+    if (typeof(TResult).IsSubclassOf(typeof(MemoCache)))
+    {
       NestedCacheFactory = GetCacheFactory(typeof(TResult));
     }
   }
 
   protected abstract void AppendImpl(T arg, TResult result);
 
-  public sealed override void AppendItem(Arguments arg, int index, object result) {
-    if (NestedCacheFactory == null) {
-      // тривиально добавляем в кэш
+  public sealed override void AppendItem(Arguments arg, int index, object result)
+  {
+    if (NestedCacheFactory == null)
+    {
+      // Store the result directly.
       AppendImpl((T) arg[index], (TResult) result);
-    } else {
-      // создаём экземпляр вложенного кэша
+    }
+    else
+    {
+      // Create a nested cache.
       var nested = NestedCacheFactory();
-      AppendImpl( // и добавляем его в кэш
+      AppendImpl( // Store it in the current cache.
         (T) arg[index],
         (TResult) (object) nested);
 
-      // кэшируем следующий аргумент
+      // Cache the next argument.
       nested.AppendItem(arg, index + 1, result);
     }
   }
 }
 ```
 
-Назначение данного класса следующее: мы вводим типы ключа и значения через типы-параметры класса и переопределяем логику добавления в кэш. В статическом конструкторе определяем, являются ли значения данного кэша другими кэшами и если это так, получаем из описанной ниже функции `GetCacheFactory()` делегат для создания экземпляров данного кэша. Логика добавления определяется следующим образом: если значениями данного кэша являются другие кэши, то создаём экземпляр вложенного кэша (через делегат-фабрику), добавляем в себя пару (*текущий_аргумент*; *вложенный_кэш*) и добавляем во вложенный кэш следующий аргумент и возвращаемое значение. Иначе просто добавляем в себя пару (*аргумент*; *возвращаемое_значение*).
+This class supplies the insertion logic. Its static constructor checks whether the cached values are themselves caches. If so, `GetCacheFactory()`, defined below, supplies a delegate that creates them. Insertion then creates a nested cache, stores the pair (*current argument*, *nested cache*), and passes the remaining arguments and result to that cache. At the innermost level, it simply stores the pair (*argument*, *return value*).
 
-То есть кэш для метода `int F(int, string, decimal)` будет представлять собой экземпляр типа:
+For example, a method with the signature `int F(int, string, decimal)` needs a cache of this shape:
 
 ```c#
 SomeCache<int, SomeCache<string, SomeCache<decimal, int>>>
 ```
 
-Где `SomeCache<,>` - наследник `MemoCache<,>`, определяющий как именно будут храниться кэшированные значения. То есть при добавлении в самый внешний кэш, он должен создать кэш второго уровня вложенности и поставить ему в соответствие первый аргумент типа `int`. Кэш второго уровня типа должен создать кэш третьего уровня и поставить ему в соответствие второй аргумент типа `string`. Кэш третьего уровня должен просто поставить в соответствие третий аргумент типа `decimal` и возвращаемое значение типа `int`.
+Here, `SomeCache<,>` is a subclass of `MemoCache<,>` that defines how entries are stored. The outer cache maps the first `int` argument to a second-level cache. That cache maps the `string` argument to a third-level cache, which maps the `decimal` argument to the method's `int` result.
 
-Давайте определим такой тип как `SomeCache<,>`, например, использующий кэш на базе обычного словаря `Dictionary<,>`:
+A straightforward implementation uses `Dictionary<,>`:
 
 ```c#
 /// <summary>
-/// Вариант кэша на базе обычного словаря.
+/// Cache backed by an ordinary dictionary.
 /// </summary>
 [Serializable]
-sealed class DictionaryCache<T, TResult> : MemoCache<T, TResult>
+private sealed class DictionaryCache<T, TResult> : MemoCache<T, TResult>
 {
-  readonly Dictionary<T, TResult> cache = new Dictionary<T, TResult>();
+  private readonly Dictionary<T, TResult> cache = new Dictionary<T, TResult>();
 
-  public static MemoCache CreateInstance() {
+  public static MemoCache CreateInstance()
+  {
     return new DictionaryCache<T, TResult>();
   }
 
-  public override bool TryResolve(object arg, out object result) {
+  public override bool TryResolve(object arg, out object result)
+  {
     TResult value;
-    if (cache.TryGetValue((T) arg, out value)) {
+    if (cache.TryGetValue((T) arg, out value))
+    {
       result = value;
       return true;
-    } else {
+    }
+    else
+    {
       result = null;
       return false;
     }
   }
 
-  protected override void AppendImpl(T arg, TResult result) {
+  protected override void AppendImpl(T arg, TResult result)
+  {
     cache.Add(arg, result);
   }
 }
 ```
 
-Тут всё предельно просто. Обратите внимание на статический метод создания экземпляров данного типа кэша. Именно из этого метода создаётся делегат-фабрика методом `GetCacheFactory()`, код которого приведён ниже:
+The static `CreateInstance()` method supplies the factory delegate used to create caches. `GetCacheFactory()` finds that method and creates the delegate:
 
 ```c#
 /// <summary>
-/// Возвращает фабрику создания экземпляров кэша по типу.
+/// Return a factory for instances of the given cache type.
 /// </summary>
-static Func<MemoCache> GetCacheFactory(Type cacheType)
+private static Func<MemoCache> GetCacheFactory(Type cacheType)
 {
-  // ищем метод "public static MemoCache CreateInstance()"
+  // Find "public static MemoCache CreateInstance()".
   var methodInfo = cacheType.GetMethod(
     "CreateInstance", BindingFlags.Static | BindingFlags.Public);
 
-  // и создаём из него делегат для быстрого создания экземпляров
+  // Create a delegate for subsequent factory calls.
   return (Func<MemoCache>)
     Delegate.CreateDelegate(typeof(Func<MemoCache>), methodInfo);
 }
 ```
 
-Для корректной работы этот метод должен быть определён во всех наследниках `MemoCache<,>`. Давайте определим ещё одного наследника, на базе коллекции `ConcurrentDictionary<,>` из .NET 4.0:
+Each concrete cache type needs to provide this factory method. Here is another implementation using `ConcurrentDictionary<,>` from .NET 4.0:
 
 ```c#
 /// <summary>
-/// Вариант кэша на базе конкурентного словаря.
+/// Cache backed by a concurrent dictionary.
 /// </summary>
 [Serializable]
-sealed class ConcurrentCache<T, TResult> : MemoCache<T, TResult>
+private sealed class ConcurrentCache<T, TResult> : MemoCache<T, TResult>
 {
-  readonly ConcurrentDictionary<T, TResult> cache = new ConcurrentDictionary<T, TResult>();
+  private readonly ConcurrentDictionary<T, TResult> cache = new ConcurrentDictionary<T, TResult>();
 
-  public static MemoCache CreateInstance() {
+  public static MemoCache CreateInstance()
+  {
     return new ConcurrentCache<T, TResult>();
   }
 
-  public override bool TryResolve(object arg, out object result) {
+  public override bool TryResolve(object arg, out object result)
+  {
     TResult value;
-    if (cache.TryGetValue((T) arg, out value)) {
+    if (cache.TryGetValue((T) arg, out value))
+    {
       result = value;
       return true;
-    } else {
+    }
+    else
+    {
       result = null;
       return false;
     }
   }
 
-  protected override void AppendImpl(T arg, TResult result) {
+  protected override void AppendImpl(T arg, TResult result)
+  {
     cache.AddOrUpdate(arg, result, (_, x) => x);
   }
 }
 ```
 
-Осталось совсем немного. Требуется метод, формирующий тип самого внешнего типа в виде экземпляра `System.Type` по определению метода, подвергаемого мемоизации:
+Next, we need to construct the root cache's `System.Type` from the method being memoized:
 
 ```c#
 /// <summary>
-/// Создаёт тип кэша, соответствующий типам параметров
-/// заданного метода и требованиям к многопоточной работе.
+/// Construct the cache type from the method parameter types
+/// and the requested concurrency setting.
 /// </summary>
-Type GetRootCacheType(MethodInfo method) {
+private Type GetRootCacheType(MethodInfo method)
+{
   Debug.Assert(method != null);
 
   var parameters = method.GetParameters();
   var resultType = method.ReturnType;
 
-  // определяем тип используемого кэша
+  // Choose the cache implementation.
   var cacheType = IsThreadSafe ? typeof(ConcurrentCache<,>) : typeof(DictionaryCache<,>);
 
-  // перебираем параметры с конца
-  for (int i = parameters.Length - 1; i >= 0; i--) {
-    // формируем тип "Cache<T1, Cache<T2, Cache<T3, TResult>>>",
-    // в котором типы T1, T2, T3 соответствуют параметрам метода:
+  // Visit parameters in reverse order.
+  for (int i = parameters.Length - 1; i >= 0; i--)
+  {
+    // Build "Cache<T1, Cache<T2, Cache<T3, TResult>>>",
+    // where T1, T2, and T3 are the method parameter types.
     resultType = cacheType.MakeGenericType(parameters[i].ParameterType, resultType);
   }
 
@@ -231,51 +256,56 @@ Type GetRootCacheType(MethodInfo method) {
 }
 ```
 
-Данный метод проверяет свойство `IsThreadSafe` аспекта и использует различный тип кэша, в зависимости от выбора пользователя. Вы можете легко определить собственные типы кэша, например, на базе очередей или каких-нибудь коллекций, ограниченных по объёму или по времени жизни объекта, и добавить их в логику формирования типа кэша.
+This method selects the dictionary implementation according to the aspect's `IsThreadSafe` property. The same construction could be extended to other cache types, such as caches with capacity limits or expiring entries.
 
-Давайте наконец определим в аспекте поле для кэша перового уровня и логику перехвата вызова метода:
+We can now add the root cache field and the method-call interceptor:
 
 ```c#
-MemoCache cacheRoot;
+private MemoCache cacheRoot;
 
 /// <summary>
-/// Обработчик вызова мемоизируемого метода.
+/// Intercept a call to the memoized method.
 /// </summary>
-public override void OnInvoke(MethodInterceptionArgs args) {
+public override void OnInvoke(MethodInterceptionArgs args)
+{
   MemoCache argCache = this.cacheRoot;
   Arguments arguments = args.Arguments;
   object result = null;
   int index = 0;
 
-  LookupArg: // последовательно извлекаем значения из кэшей
-  if (argCache.TryResolve(arguments[index++], out result)) {
-    // если не последний аргумент, то кэш
+  LookupArg: // Look up arguments in successive caches.
+  if (argCache.TryResolve(arguments[index++], out result))
+  {
+    // Before the last argument, the result is another cache.
     if (index < arguments.Count)
     {
         argCache = (MemoCache) result;
-        goto LookupArg; // да, это goto!
+        goto LookupArg; // Continue with the next argument.
     }
 
     args.ReturnValue = result;
-  } else { // промах кэша, вызываем метод и кэшируем
+  }
+  else // On a miss, invoke the method and cache its result.
+  {
     args.Proceed();
     argCache.AppendItem(arguments, index - 1, args.ReturnValue);
   }
 }
 ```
 
-Тут всё предельно просто (мне здесь `goto` почему-то куда больше нравится, чем циклы с выходом по `return;`), объяснять нечего. Небольшим бенефитом тут является то, что в случае промаха у нас есть ссылка именно на тот кэш, в котором не нашлось переданного аргумента и не надо искать место для добавления.
+The `goto` keeps the lookup path explicit: each successful lookup either yields the result or advances to the next cache. On a miss, `argCache` already refers to the cache where the missing argument belongs, so insertion does not need to traverse the preceding levels again.
 
-Осталось определить метод статической инициализации аспекта, изучающий мемоизируемый метод и подготавливающий фабрику для создания кэшей самого внешнего уровня (корневых кэшей):
+The aspect's runtime initialization method inspects the target method and prepares a factory for root caches:
 
 ```c#
-static Func<MemoCache> RootCacheFactory;
+private static Func<MemoCache> RootCacheFactory;
 
 /// <summary>
-/// Статическая инициализация аспекта,
-/// создаёт кэш для мемоизации статических методов.
+/// Initialize the aspect for the target method.
+/// Create the root cache here for static methods.
 /// </summary>
-public override void RuntimeInitialize(MethodBase method) {
+public override void RuntimeInitialize(MethodBase method)
+{
   var type = GetRootCacheType((MethodInfo) method);
   RootCacheFactory = GetCacheFactory(type);
 
@@ -286,35 +316,40 @@ public override void RuntimeInitialize(MethodBase method) {
 }
 ```
 
-Данный метод вызывается один раз для каждого метода, на который применяется аспект мемоизации. Если метод статический, то тут же создаётся экземпляр корневого кэша. Для методов уровня экземпляра PostSharp использует реализацию интерфейса `IInstanceScopedAspect`:
+This method runs once for each method to which the aspect is applied. For a static method, it creates the root cache immediately. For instance methods, PostSharp uses the `IInstanceScopedAspect` implementation:
 
 ```c#
 /// <summary>
-/// Создание экземпляра аспкета уровня экземпляра, попадает в конструктор типа,
-/// экземплярный метод которого подвергается аспекту мемоизации.
+/// Create a per-object aspect from the constructor of the type
+/// whose instance method is being memoized.
 /// </summary>
-public object CreateInstance(AdviceArgs adviceArgs) {
-  return new MemoizeAttribute {
+public object CreateInstance(AdviceArgs adviceArgs)
+{
+  return new MemoizeAttribute
+  {
       IsThreadSafe = this.IsThreadSafe
   };
 }
 
 /// <summary>
-/// Инициализация аспекта уровня экземпляра.
+/// Initialize the per-object aspect.
 /// </summary>
-public void RuntimeInitializeInstance() {
+public void RuntimeInitializeInstance()
+{
   this.cacheRoot = RootCacheFactory();
 }
 ```
 
-Реализация `CreateInstance()` создаёт экземпляр аспекта уровня экземпляра (просто копирует все данные из аспекта уровня типа), а `RuntimeInitializeInstance()` инициализирует корневой кэш этого экземпляра аспекта.
+`CreateInstance()` creates the per-object aspect and copies its configuration from the type-scoped aspect. `RuntimeInitializeInstance()` then initializes that aspect's root cache.
 
-Всё, можно тестировать аспект на всеми любимых факториалах:
+We can exercise both variants with factorial methods:
 
 ```c#
-class Foo {
+class Foo
+{
   [Memoize]
-  static int StaticFact(int x) {
+  private static int StaticFact(int x)
+  {
       Console.WriteLine("=> StaticFact({0}) call", x);
 
     if (x == 0) return 1;
@@ -322,7 +357,8 @@ class Foo {
   }
 
   [Memoize(IsThreadSafe=true)]
-  int InstanceFact(int x) {
+  private int InstanceFact(int x)
+  {
     Console.WriteLine("=> InstanceFact({0}) call", x);
 
     return Enumerable
@@ -330,13 +366,14 @@ class Foo {
       .Aggregate(1, (a, b) => a * b);
   }
 
-  static void Main() {
+  private static void Main()
+  {
     Action<string, object> wl = Console.WriteLine;
 
-    wl("SataticFact(2) = {0}", StaticFact(2));
-    wl("SataticFact(2) = {0}", StaticFact(2));
-    wl("SataticFact(7) = {0}", StaticFact(7));
-    wl("SataticFact(7) = {0}", StaticFact(7));
+    wl("StaticFact(2) = {0}", StaticFact(2));
+    wl("StaticFact(2) = {0}", StaticFact(2));
+    wl("StaticFact(7) = {0}", StaticFact(7));
+    wl("StaticFact(7) = {0}", StaticFact(7));
 
     Console.WriteLine();
 
@@ -352,20 +389,20 @@ class Foo {
 }
 ```
 
-Обратите внимание на различие в реализации. Вывод данного примера:
+The static method is recursive, while the instance method computes its result iteratively. Running the example produces:
 
     => StaticFact(2) call
     => StaticFact(1) call
     => StaticFact(0) call
-    SataticFact(2) = 2
-    SataticFact(2) = 2
+    StaticFact(2) = 2
+    StaticFact(2) = 2
     => StaticFact(7) call
     => StaticFact(6) call
     => StaticFact(5) call
     => StaticFact(4) call
     => StaticFact(3) call
-    SataticFact(7) = 5040
-    SataticFact(7) = 5040
+    StaticFact(7) = 5040
+    StaticFact(7) = 5040
 
     => InstanceFact(7) call
     a.InstanceFact(7) = 5040
@@ -374,6 +411,6 @@ class Foo {
     b.InstanceFact(7) = 5040
     b.InstanceFact(7) = 5040
 
-Красиво и очень просто, не правда ли? Стоит отметить, что данная мемоизация не считает исключения, выбрасываемые мемоизируемым методом, за возвращаемое значение и не кэширует их, а просто пропускает в клиентский код.
+Repeated calls use the cached result, and each `Foo` instance has its own cache. Exceptions thrown by the memoized method are not cached: they propagate to the caller, and a later call with the same arguments attempts the computation again.
 
-Полный код этого поста доступен [здесь](http://pastebin.com/Mk6NuUMH). Happy PostSharping!
+The complete example is available in [this gist](https://gist.github.com/controlflow/8a40704e3b623d302765b2b3c05c8a8f).
