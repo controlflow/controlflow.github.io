@@ -146,8 +146,8 @@ blockquote {
 }
 
 pre {
-    margin-left: 1.5em;
-    margin-right: 1.5em;
+    margin-left: 0.75em;
+    margin-right: 0.75em;
 }
 
 @include media-query($on-palm) {
@@ -184,9 +184,8 @@ code {
 }
 
 pre {
-    padding: 12px 16px;
+    padding: 12px 8px;
     border-radius: 16px;
-    //overflow-x: scroll;
 
     > code {
         border: 0;
@@ -196,7 +195,12 @@ pre {
         margin-right: 0;
 
         display: block;
-        overflow-x: overlay;
+        overflow-x: auto;
+        scrollbar-width: none;
+
+        &::-webkit-scrollbar {
+            display: none;
+        }
     }
 }
 
