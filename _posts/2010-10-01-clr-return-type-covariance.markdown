@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "The CLR and Return Type Covariance"
+title: "CLR return type covariance"
 date: 2010-10-01 13:25:31
 author: Aleksandr Shvedov
 tags: csharp covariance override
