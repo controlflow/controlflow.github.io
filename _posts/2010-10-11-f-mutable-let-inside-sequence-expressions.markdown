@@ -5,38 +5,38 @@ date: 2010-10-11 13:31:36
 author: Aleksandr Shvedov
 tags: fsharp seq ienumerable mutable sequence
 ---
-Наткнулся на интересные грабли в F# при попытке использовать изменяемые let-привязки внутри sequence expressions, данный код компилируется и работает:
+I ran into an unexpected restriction when using mutable `let` bindings inside F# sequence expressions. The following code compiles and runs:
 
 ```fsharp
 let xs = seq {
   yield 1
   let mutable x = 0
-  x <- 2 // ok
+  x <- 2 // OK
   yield x
 }
 ```
 
-Однако если перенести присваивание подальше от определения let и убрать в цикл, то код перестаёт компилироваться:
+However, moving the assignment into a loop causes the code to fail to compile:
 
 ```fsharp
 let ys = seq {
   yield 1
   let mutable x = 0
   while true do
-    x <- 2 // error FS0407!
+    x <- 2 // Error FS0407
     yield x
 }
 ```
 
-В ошибке компиляции говорится следующее:
+The compiler reports the following error:
 
 > `error FS0407:`<br/>
 > The mutable variable 'x' is used in an invalid way. Mutable variables cannot be captured by closures. Consider eliminating this use of mutation or using a heap-allocated mutable reference cell via 'ref' and '!'.
 
-Возникает вопрос: о каком захвате в замыкание идёт речь в сообщении об ошибке? Думаю, подобное описание выглядит как-то очень неадекватно, особенно для людей, не знакомых глубоко с устройством sequence expression или итераторов C#.
+The reference to closure capture is not immediately clear from the source code. The diagnostic is particularly difficult to interpret without knowing how sequence expressions or C# iterators are implemented.
 
-А что касается причины такого поведения, то дело заключается в том, что выражение присваивание во втором примере попадает в состояние sequence expression’а, отличное от того, в котором была определена изменяемая `let`-привязка. То есть в другой case генерируемого для `MoveNext()` блока `switch`’а, нежели в котором изменяемая `let`-привязка инициализируется нулём.
+The reason for this behavior is that the assignment in the second example ends up in a different state of the sequence expression from the one where the mutable `let` binding is initialized. In the generated `MoveNext()` method, the assignment and the initialization to zero belong to different cases of the `switch` statement.
 
-Компилятор F# невидимо для пользователя разбивает sequence expression на части кода (ориентируясь по `yield`-выражениям и выражениям, управляющим ходом выполнения) и считает, что все обращения к именам в предущей части из следующей - это замыкания. Не знаю, возможно это действительно следует называть “замыканием”, однако границы “частей” sequence expression’ов совершенно неочевидны рядовому разработчику.
+The F# compiler implicitly splits a sequence expression into regions based on `yield` expressions and control flow. It treats references from a later region to variables declared in an earlier one as closure capture. Whether or not "closure" is the most useful term here, the boundaries between these regions are not obvious from the source code.
 
-Не берусь судить как было бы сделать правильно: вовсе запретить в sequence expressions использовать `mutable` или наоборот разрешить мутирование из лубой части sequence-выражения, а может и оставить как сейчас. В любом случае, текст сообщения ошибке мог бы быть куда понятнее.
+There are several possible approaches: disallow mutable bindings inside sequence expressions, allow mutation throughout the expression, or retain the current restriction. I'm not sure which would be preferable, but in any case the diagnostic could explain the restriction more clearly.

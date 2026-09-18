@@ -5,11 +5,11 @@ date: 2010-10-10 02:33:00
 author: Aleksandr Shvedov
 tags: csharp ienumerable rec linq
 ---
-Пару раз сталкивался с такой простой задачей, как проход по древовидной структуре данных и выравнивание её в плоскую последовательность… Решал я это дело рекурсивным итератором и результат меня вполне устраивал, но по пути до меня дошло, что ни в LINQ, ни в Reactive Extensions for .NET нет подобного алгоритма, поддающегося переиспользованию.
+I've needed to traverse a tree and flatten it into a sequence on several occasions. A recursive iterator worked well enough, but I couldn't find a reusable operation for this in either LINQ or Reactive Extensions for .NET.
 
-Так же существует проблема линейного увеличения алгоритмической сложности перебора последовательности при увеличении глубины структуры - вложенные итераторы C# вполне могут “притормаживать” на глубоких структурах из-за кучи декораторов `IEnumerator<T>`. Эту проблему можно решить, складывая энумераторы всех вложенных последовательностей в однонаправленный список так, чтобы текущий энумератор всегда находился в голове списка, тогда до него всегда будет рукой подать и нагрузка на стек заменится нагрузкой на кучу.
+There is also a performance concern: with nested C# iterators, the cost of producing each element can grow linearly with the depth of the structure, because each element passes through a chain of `IEnumerator<T>` wrappers. One way to avoid this is to keep the active enumerators in a singly linked list, with the current enumerator directly accessible at the head. This replaces the chain of nested iterator calls with explicit state allocated on the heap.
 
-Код ниже - попытка обобщить обход древовидных структур в набор методов-расширений `SelectRec()`:
+The following code generalizes tree traversal into a set of `SelectRec()` methods:
 
 ```c#
 using System;
@@ -17,7 +17,7 @@ using System.Collections.Generic;
 
 public static class RecExtensions
 {
-  // public surface
+  // Public API
 
   public static IEnumerable<T> SelectRec<T>(
     this IEnumerable<T> source, Func<T, IEnumerable<T>> selector)
@@ -50,71 +50,87 @@ public static class RecExtensions
     return SelectRec(new[] { source }, predicate, selector);
   }
 
-  // implementation
+  // Implementation
 
   static IEnumerable<T> SelectRecImpl<T>(
     IEnumerable<T> source, Func<T, bool> predicate, Func<T, IEnumerable<T>> selector)
   {
     EnumList<T> list = null;
-    try {
+    try
+    {
       IEnumerator<T> e = null;
-      while (true) {
-        // get the new enumerator if needed
-        if (e == null) e = source.GetEnumerator();
-        try {
-          // iterate over the current enumerator
-          while (e.MoveNext()) {
+      while (true)
+      {
+        // Obtain a new enumerator when needed.
+        if (e == null)
+          e = source.GetEnumerator();
+
+        try
+        {
+          // Advance the current enumerator.
+          while (e.MoveNext())
+          {
             var o = e.Current;
             yield return o;
 
-            // if current - is inner enumerable
-            if (predicate(o)) {
-              // get the new enumerable
-              source = selector(o); 
-              // store current
+            // Descend into the child sequence when requested.
+            if (predicate(o))
+            {
+              source = selector(o);
+
+              // Suspend the current enumerator until the children are processed.
               list = new EnumList<T>(e, list);
               e = null;
 
-              break; // delay enumerator
+              break;
             }
           }
         }
-        finally { // dispose the enumerator if not delayed
-          if (e != null) e.Dispose();
+        finally
+        {
+          // Dispose the current enumerator unless it has been suspended.
+          if (e != null)
+            e.Dispose();
         }
 
-        if (e == null) continue; // inner enumerable
-        if (list == null) break; // nothing to enumerate
-        else {
+        if (e == null)
+          continue; // Start enumerating the child sequence.
+        if (list == null)
+          break; // No suspended enumerators remain.
+        else
+        {
           e = list.Enumerator;
           list = list.Next;
         }
       }
     }
-    finally {
-      // enumerator 'e' here is already disposed,
-      // but exception may be thrown during dispose
-      // so we should dispose all the enumerator list
+    finally
+    {
+      // Dispose all suspended enumerators, even if disposing
+      // the current enumerator threw an exception.
       DisposeRec(list);
     }
   }
 
-  // Recursively disposes the elements of enumerator stack
-  // in correct order with the correct exception handling.
+  // Dispose the enumerator stack in order, ensuring that an exception
+  // from one enumerator does not prevent disposal of the others.
   static void DisposeRec<T>(EnumList<T> xs)
   {
-    if (xs != null) {
+    if (xs != null)
+    {
       IDisposable disposable = xs.Enumerator;
-      try {
+      try
+      {
         disposable.Dispose();
       }
-      finally {
+      finally
+      {
         DisposeRec(xs.Next);
       }
     }
   }
 
-  // immutable single-linked list
+  // Immutable singly linked list.
   sealed class EnumList<T>
   {
     public readonly IEnumerator<T> Enumerator;
@@ -129,25 +145,30 @@ public static class RecExtensions
 }
 ```
 
-Следует заметить, что при использовании списка `IEnumerator<T>` возникает другая проблема - правильно делать им `Dispose()` в случаях, когда во время перебора последовательности возникает исключение. В коде выше это решено в рекурсивном методе `DisposeRec()`, который за счёт рекурсии формирует вызовы `Dispose()` всех итераторов во множестве try-finally блоков. Это нужно чтобы возможное исключение во время `Dispose()` одного из энумераторов не повлияло на вызов `Dispose()` внешних энумераторов.
+Maintaining a list of `IEnumerator<T>` instances introduces another concern: they must all be disposed correctly if enumeration throws. In this implementation, the recursive `DisposeRec()` method places each call to `Dispose()` inside a `try`/`finally` block. This ensures that an exception from one enumerator's `Dispose()` does not prevent the remaining outer enumerators from being disposed.
 
-В public surface торчит две пары методов, два из них принимают на вход единственное значение, два других - последовательности. В каждой паре одна перегрузка предусматривает параметр-предикат, вычисляющий какие значения содержат в себе подпоследовательности, а другая перегрузка считает все значения потенциально содержащими подпоследовательности. В любом случае надо указать функцию-селектор подпоследовательности. Всё просто, теперь можно пробежаться по всем папкам всех дисков:
+The public API consists of two pairs of methods: one pair accepts a single root value, and the other accepts a sequence of roots. Each pair includes an overload with a predicate that determines whether to descend into a value's child sequence. The other overload treats every value as a potential parent. The predicate controls traversal, not whether the value itself appears in the result. All overloads require a selector that returns the child sequence. For example, the following query traverses the directories on all available drives:
 
 ```c#
 var dirs = DriveInfo
   .GetDrives()
   .Where(d => d.IsReady)
   .Select(d => d.RootDirectory)
-  .SelectRec(dir => {
-    try { return dir.EnumerateDirectories(); }
-    catch (UnauthorizedAccessException) { }
+  .SelectRec(dir =>
+  {
+    try
+    {
+      return dir.EnumerateDirectories();
+    }
+    catch (UnauthorizedAccessException)
+    {
+      // easiest way to handle access errors
+    }
+
     return Enumerable.Empty<DirectoryInfo>();
   });
-
 ```
 
-Не обращайте внимание на catch, это самый быстрый способ проверить есть ли у приложения права на тот или иной каталог Windows, гыгы :)
+The usefulness of this API depends on the traversal requirements. A predicate and a child-sequence selector may be sufficient for simple cases, but more complex traversal rules would require a richer interface.
 
-Не знаю, удобно ли будет им пользоваться в реальных ситуациях, скорее всего задание правила выборки предикатом-фильтром и функцией-селектором достаточно совсем для небольшого количества сценариев.
-
-Очень легко этот код можно доработать чтобы получить что-то вроде `SelectDistinctRec()`, который может пригодиться если, например, если у Вас есть объекты и сложными связями между ними, включая циклические, и Вам следует получить конечную последовательность всех объектов, связанных с данным. Использование `HashSet<T>` позволит корректно обрабатывать циклы, отбрасывая уже найденные объекты.
+The implementation could also be extended into a `SelectDistinctRec()` method for traversing object graphs with shared references or cycles. A `HashSet<T>` could track values already visited, preventing repeated traversal and allowing a finite graph with cycles to be flattened into a finite sequence.
