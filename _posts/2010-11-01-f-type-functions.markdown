@@ -5,24 +5,24 @@ date: 2010-11-01 00:00:00
 author: Aleksandr Shvedov
 tags: fsharp type function generalizable typeof let
 ---
-Всем привет! Сегодня, по совету Владимира Матвеева (не могу не упомянуть [новый](http://intellifactory.com/blogs/vladimir.matveev/) и [старый](http://v2matveev.blogspot.com/) блоги), попытаюсь осветить такую интересную и редкую тему, как F# *type functions*.
+At Vladimir Matveev's suggestion, this post looks at a less familiar feature of F#: *type functions*. You can find his writing on his [new blog](http://intellifactory.com/blogs/vladimir.matveev/) and [old blog](http://v2matveev.blogspot.com/).
 
-Я думаю многие разработчики, изучающие F# и имеющие опыт разработки на C#, наверняка задавались вопросом: как выразить на F# некоторые встроенные в язык конструкции C#, такие как `typeof(T)`, `default(T)` и, возможно, гораздо более редко встречающийся оператор `sizeof(T)`?
+Developers learning F# after working with C# may wonder how to express operations such as `typeof(T)`, `default(T)`, and the less frequently used `sizeof(T)`.
 
-Давайте задумается, а что у этих операторов C# есть общего? Все они являются выражениями, параметризируются статически известным типом, не имеют видимых сторонних эффектов и значение результата их вычисления зависит только от явно задаваемого типа-параметра. В принципе, можно было бы заменить все эти операторы обычными generic-методами следующей сигнатуры: `Type TypeOf<T>()`. Однако раз данная функция чиста и не получает аргументов, то удобнее думать о ней вообще как о *значении, параметризованном типом*.
+What do these C# operators have in common? They are expressions parameterized by a statically known type, have no observable side effects, and produce a result that depends only on the explicitly supplied type argument. Each could be represented by a generic method with no value arguments, such as `Type TypeOf<T>()`. Since such a function is pure and takes no value arguments, it is useful to think of it as a *value parameterized by a type*.
 
-Вместо встроенных в язык и грамматику конструкций, F# предлагает в стандартной библиотеке несколько таких значений, обладающих функционалом соответствующих операторов C#:
+Rather than introducing special language syntax for these operations, F# provides corresponding values in its standard library:
 
 ```c#
-typeof(List<T>)     =>  typeof<List<T>>
+typeof(List<T>)     =>  typeof<List<'T>>
 typeof(Action<,,>)  =>  typedefof<Action<_,_,_>>
 default(decimal)    =>  Unchecked.defaultof<decimal>
 sizeof(int)         =>  sizeof<int>
 ```
 
-Стоит отметить, что в C# введён специальный синтаксис для получения generic type definition (открытого generic-типа) – надо вовсе не указывать все типы-параметры, например: `Action<>` или `Dictionary<,>`. Однако в F# явные типы-параметры надо указывать всегда (отдельного синтаксиса не предусмотрено), поэтому для получения generic type definition следует пользоваться отдельным значением `typedefof<T>`, в качестве `T` указав *generic-тип с любыми возможными конкретными типами-параметрами*. Иногда можно применить небольшой приём для улучшения читаемости кода: указать в качестве типов-параметров `_` – тогда вывод типов автоматически выведет соответствующие типы-параметры в тип `obj` (как в примере выше).
+C# has dedicated syntax for referring to a generic type definition: leave the type argument positions empty, as in `Action<>` or `Dictionary<,>`. F# has no separate syntax for this. Instead, use `typedefof<T>`, supplying a constructed generic type with any valid type arguments as `T`. One way to make this more readable is to use `_` for the type arguments. Where the constraints permit it, type inference defaults these arguments to `obj`, as in the example above.
 
-Так вот, подобные `let`-привязки значений (то есть не имеющие аргументов), параметризированных типами, в F# называются *«type functions»*. В стандартной библиотеке F# есть ещё несколько примеров type functions, которые Вы наверняка уже замечали:
+In F#, these type-parameterized `let` bindings, which take no value arguments, are called *type functions*. The standard library contains several more examples that may already be familiar:
 
 ```fsharp
 List.empty
@@ -31,16 +31,16 @@ Seq.empty
 Map.empty
 ```
 
-Можно снова заметить, что данные значения легко представить как чистые generic-функции без аргументов, результат которых зависит только от типа-параметра. Однако следует заметить, что указывать тип-параметр явно для данных значений оказывается совершенно не обязательно (что вовсе невозможно в случае `typeof<T>` и других рассмотренных выше type functions), тип-параметр может быть неявно определён алгоритмом вывода типов F# по дальнейшему использованию. Получается, что эти type functions представляют собой некие *уникальные значения, не зависящее выведенного типа-параметра*. По сути, пустой список типа `string` логически ничем не отличается от пустого списка типа `int`, так как тип-параметр логически не используется, почему бы в данном случае не иметь удобное *полиморфное* значение «пустой список», не зависящее от типа-параметра?
+These values can also be understood as pure generic functions with no value arguments. Unlike `typeof<T>` and the other type functions discussed above, however, they do not require explicit type arguments: F# can infer them from how the values are subsequently used. They represent the same conceptual value across different element types. An empty list of strings and an empty list of integers are both empty; neither contains an element whose value depends on the element type. It is therefore useful to have a *polymorphic* empty-list value that can be used with either type.
 
-Следует добавить, что `[]` и `[||]` являются всего лишь синтаксическим сахаром для `List.empty` и `Array.empty` соответственно, то есть так же являются type functions.
+The literals `[]` and `[||]` provide syntax for these empty list and array values, corresponding to `List.empty` and `Array.empty`, respectively.
 
-Возникают вопросы: как определяются свои type functions? Почему для некоторых type functions тип-параметр требуется указывать явно, а для других – нет?
+How can we define our own type functions? And why do some require explicit type arguments while others allow them to be inferred?
 
-Предупреждаю сразу, что определение собственных type function в F# – очень редкое занятие в программировании на F#. Определить type function очень легко – надо всего лишь добавить явное перечисление типов-параметров для let-привязки значения:
+Defining a type function is rarely necessary in everyday F# code, but the syntax is straightforward: add an explicit type parameter list to a `let` binding that has no value arguments:
 
 ```fsharp
-// Список иерархии классов для типа 'T
+// The class hierarchy for type 'T
 let typeHierarchy<'T> =
   let rec loop ts (t: System.Type) =
     if t = null then ts
@@ -48,7 +48,7 @@ let typeHierarchy<'T> =
   loop [] typeof<'T>
 ```
 
-Использование:
+Usage:
 
 ```fsharp
 typeHierarchy<System.IO.FileStream>
@@ -58,19 +58,19 @@ val it : string list =
   ["Object"; "MarshalByRefObject"; "Stream"; "FileStream"]
 ```
 
-Однако следует обратить внимание на то, что явное перечисление типов-аргументов для let-привязок внутри выражений, определений типов и computation expressions запрещено, то есть type functions в F# можно определить только на уровне модуля.
+Explicit type parameter lists are not allowed on `let` bindings inside expressions, type definitions, or computation expressions. Type functions can therefore only be defined at module level.
 
-В случае type function подобных `typeof<T>`, тип возвращаемого значения никак не полагается на тип-параметр type function (`typeof<T>` является значением обычного типа `System.Type`), а следовательно, имеет смысл *потребовать от пользователя явное указание типа-параметра*, иначе вывод типов всегда будет предполагать тип `obj`. Это можно осуществить, отметив type function специальным атрибутом `[<RequiresExplicitTypeArguments>]` из стандартной библиотеки F#. Этот атрибут работает для любых let-привязок и методов, отключая вывод типов F#, что помогает избавиться от вывода типа `obj` для типов-параметров, которые не могут быть корректно выведены из аргументов и должны указываться по месту вызова явно, например:
+For a type function such as `typeof<T>`, the result type does not depend on the type parameter: the result is always a `System.Type`. There is therefore no information in the result type from which to infer `T`, and inference would otherwise default it to `obj`. It makes sense to *require an explicit type argument*. The standard library's `[<RequiresExplicitTypeArguments>]` attribute does exactly this. It can be applied to `let` bindings and methods to require explicit type arguments rather than allowing F# to infer them. This is useful when a type parameter cannot be inferred from the arguments or the result type. Without the attribute, a call like the following can silently infer `obj`:
 
 ```fsharp
-type Foo =
+type Foo() =
    member this.ServicesOfType<'T>(name: string) =
      ...
 
-Foo.ServicesOfType() // компилируется, но 'T = obj!
+Foo().ServicesOfType("example") // Compiles, but 'T is inferred as obj.
 ```
 
-Однако в случае других type functions, таких как `Seq.empty` и других, тип-параметр может быть успешно выведен по дальнейшему использованию, так как тип возвращаемого значения полагается на тип-параметр (`Seq.empty<’a>` представляет собой значение типа `seq<’a>`). Отлично, давайте определим тривиальную type function и попробуем её использовать следующим образом:
+For type functions such as `Seq.empty`, the result type does depend on the type parameter: `Seq.empty<'a>` has type `seq<'a>`. This allows the type argument to be inferred from subsequent use. Consider a simple type function and an attempt to use its result at two different element types:
 
 ```fsharp
 let myEmptyList<'a> = List.empty<'a>
@@ -80,11 +80,11 @@ let func() =
   (1 :: empty, "a" :: empty) // error
 ```
 
-Получаем ошибку следующего содержания:
+The compiler reports:
 
 > Type mismatch. Expecting a string list but given a int list. The type ‘string’ does not match the type ‘int’.
 
-То есть значение empty невозможно использовать как полиморфное, как список различного типа в нескольких выражениях. Дело в том, что type значение function по умолчанию не подвергается *автоматическому обобщению* (automatic generalization) F#, как функции, например:
+The local value `empty` cannot be used polymorphically as both an integer list and a string list. By default, a value obtained from a type function does not participate in F#'s *automatic generalization* in the same way as a function binding. Introducing a function makes the example work:
 
 ```fsharp
 let func() =
@@ -92,7 +92,7 @@ let func() =
   (1 :: empty(), "a" :: empty()) // fine
 ```
 
-Как раз для решения данной проблемы применяется атрибут `[<GeneralizableValue>]`. После аннотации type function данным атрибутом, значение начинает рассматриваться как полиморфное и принимать участие в автоматическом обобщении:
+The `[<GeneralizableValue>]` attribute addresses this distinction. Annotating the type function allows its value to participate in automatic generalization, so the local binding can be used polymorphically:
 
 ```fsharp
 [<GeneralizableValue>]
@@ -103,9 +103,9 @@ let func() =
   (1 :: empty, "a" :: empty) // fine
 ```
 
-Обычно type function следует обязательно отмечать либо атрибутом `[<GeneralizableValue>]`, либо `[<RequiresExplicitTypeArguments>]`, в зависимости от сценария использования.
+A type function should generally be marked with either `[<GeneralizableValue>]` or `[<RequiresExplicitTypeArguments>]`, depending on how it is intended to be used.
 
-Напоследок следует сказать, что для компилятора все обращения к type function превращаются в обычный вызов generic-функции, то есть значение type всегда вычисляется заново, что может приводить к забавным эффектам:
+Finally, an access to a type function is compiled as a call to a generic method. Its definition is evaluated on each access, rather than once when the binding is declared. This matters when the definition allocates mutable state:
 
 ```fsharp
 let zeroRef<'a> : int ref = ref 0
@@ -114,4 +114,4 @@ zeroRef := 1
 printfn "%A" zeroRef // {contents = 0;}
 ```
 
-Рекомендую определять свои type functions только убедившись, что вычисление не имеет видимых сторонних эффектов и является хорошим претендентом на то, чтобы рассматривать его как значение, параметризованное типом. Ну и понимая, что оно вам действительно надо, конечно.
+A type function is best suited to a computation with no observable side effects that can meaningfully be treated as a value parameterized by a type. Define one when that model fits the problem and provides a clear benefit over an ordinary function.

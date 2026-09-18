@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "ISerializationSurrogate"
+title: "ISerializationSurrogate interface"
 date: 2010-10-20 01:13:00
 author: Aleksandr Shvedov
 tags: csharp serialization surrogate yield

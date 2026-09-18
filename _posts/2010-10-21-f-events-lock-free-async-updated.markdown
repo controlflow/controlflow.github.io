@@ -5,17 +5,17 @@ date: 2010-10-21 02:05:00
 author: Aleksandr Shvedov
 tags: fsharp events delegate lock-free subscription
 ---
-Сегодня речь пойдёт о механизме событий в F#. Не смотря на то, что F# обладает такой замечательно штукой, как события первого класса, мне не очень понравилось как организована работа с событиями внутри.
+F# provides first-class events, but I found a few limitations in their implementation that are worth examining.
 
-Для того чтобы на события определённых в F# типов смогли подписываться из других CLI-языков приходится использовать тормозной `DelegateEvent`, вызывающий делегат с подписчиками через рефлексию. Данную проблему хорошо описал в своём блоге Владимир Матвеев: ["F# performance of events"](http://v2matveev.blogspot.com/2010/06/f-performance-of-events.html) (+ [update](http://v2matveev.blogspot.com/2010/06/f-performance-of-events-update.html)). Проблема заключается в вызове делегата в обобщённом коде, кода тип делегата является параметризуемым. Владимир предложил решение проблемы с помощью кодогенерации или F# member constraints, однако существует ещё более простой и наименее ресурсоёмкий способ (как оказалось, Владимир обнаружил этот способ [раньше меня](http://rsdn.ru/forum/decl/3979546.1.aspx)).
+To expose events on F# types to subscribers written in other CLI languages, the standard approach uses `DelegateEvent`, which invokes its handlers through reflection. Vladimir Matveev describes the resulting performance problem in ["F# performance of events"](http://v2matveev.blogspot.com/2010/06/f-performance-of-events.html) and its [update](http://v2matveev.blogspot.com/2010/06/f-performance-of-events-update.html). The difficulty is invoking a delegate from generic code when its type is itself a type parameter. Vladimir proposed solutions using code generation or F# member constraints, but there is a simpler approach with less overhead. It turned out that he had also [discovered this approach before I did](http://rsdn.ru/forum/decl/3979546.1.aspx).
 
-Используя великолепный метод `Delegate.CreateDelegate`, можно создать делегат из экземплярного метода `Invoke()` любого типа делегата таким образом, что `this` для вызова метода `Invoke()` можно будет передавать в качестве первого параметра получаемого делегата, то есть фактически сделать статический метод из экземплярного. Таким образом можно получить делегат-invoker экземпляров делегатов любого типа, не применяя какую-либо кодогенерацию и отказавшись от излишнего копирования кода `inline`-методов при решении проблемы с помощью member constraints (гляньте Reflector’ом, если хотите ужаснуться).
+`Delegate.CreateDelegate` can create an open instance delegate for a delegate type's `Invoke()` method. The first argument to the resulting delegate supplies the receiver that would normally be passed as `this`. This gives us a typed invoker for instances of the chosen delegate type, without generating code or duplicating the bodies of `inline` methods as the member-constraint approach can do.
 
-Ещё одну проблему составляет тот факт, что в отличие от C#, процесс подписки и отписки на события, создаваемые с помощью входящих в стандартную библиотеку F# класоов `Event` и `DelegateEvent`, не является синхронизованным. До верcии 4.0, компилятор C# оборачивал тела аксессоров, генерируемых для field-like events, в блоки `lock(this) { }` (в статических событиях - `lock(typeof(Класс)) { }`). Начиная с версии C# 4.0 в аксессорах событий генерируется код lock-free подписки. А чем F# хуже?
+Another limitation is that the F# standard library's `Event` and `DelegateEvent` classes do not synchronize subscription and unsubscription. By comparison, before C# 4.0, the C# compiler synchronized the accessors generated for field-like events using `lock(this)` for instance events and `lock(typeof(ContainingType))` for static events. Starting with C# 4.0, it generates lock-free subscription code instead. Both approaches can also be implemented in F#.
 
-Ко всему прочему, [@cadet354](https://twitter.com/cadet354) предложил включить в событие функционал для асинхронного вызова подписчиков (ведь действительно, часто совершенно не обязательно дожидаться окончания их работы), а так же параллельного вызова подписчиков (к примеру, используя инфраструктуру F# async). Я не считаю эти сценарии слишком распространёнными, но почему бы и не предусмотреть их.
+[@cadet354](https://twitter.com/cadet354) also suggested supporting asynchronous invocation, for cases where the caller does not need to wait for handlers to finish, and parallel invocation using F# async workflows. These options may be useful even if they are less common than synchronous event delivery.
 
-А вот и набросок класса, решаюшего обе проблемы:
+The following prototype combines these invocation and subscription options:
 
 ```fsharp
 open System
@@ -23,26 +23,26 @@ open System.Threading
 
 [<Sealed>]
 type PowerEvent<'del, 'args
-     when 'del :  not struct                  // ссылочный тип
-      and 'del :  delegate<'args, unit>  // сигнатура делегата
-      and 'del :> Delegate        // наследник System.Delegate
-      and 'del :  null>() =         // принимает значение null
+     when 'del :  not struct                  // Reference type.
+      and 'del :  delegate<'args, unit>  // Delegate signature.
+      and 'del :> Delegate        // Derives from System.Delegate.
+      and 'del :  null>() =         // Supports null.
 
   [<DefaultValue>]
   val mutable private target : 'del
 
-  // Создание инвокатора делегатов типа 'del
+  // Create an invoker for delegates of type 'del.
   static let invoker : Action<_,_,_> =
     downcast Delegate.CreateDelegate(
       typeof<Action<'del, obj, 'args>>, typeof<'del>.GetMethod "Invoke")
 
-  // Триггер события
+  // Invoke the event handlers synchronously.
   member self.Trigger (sender: obj, args: 'args) =
      match self.target with
      null    -> ()
    | handler -> invoker.Invoke (handler, sender, args)
 
-  // Асинхронный триггер события
+  // Invoke the event handlers asynchronously.
   member self.TriggerAsync (sender: obj, args: 'args) =
      match self.target with
      null    -> ()
@@ -50,7 +50,7 @@ type PowerEvent<'del, 'args
          async { invoker.Invoke (handler, sender, args) }
          |> Async.Start
 
-  // Асинхронный параллельный триггер события
+  // Invoke the event handlers asynchronously, allowing parallel execution.
   member self.TriggerParallel (sender: obj, args: 'args) =
      match self.target with
      null    -> ()
@@ -63,9 +63,9 @@ type PowerEvent<'del, 'args
       |> Async.Ignore
       |> Async.Start
 
-  // Чтобы не создавать экземпляр IDelegateEvent<'del>
-  // на каждый факт подписки/отписки на событие, можно
-  // реализовать интерфейс для просто подписки здесь:
+  // To avoid creating an IDelegateEvent<'del> wrapper
+  // for every subscription or unsubscription, implement
+  // the unsynchronized interface directly here:
   interface IDelegateEvent<'del> with
 
      member self.AddHandler handler =
@@ -74,10 +74,10 @@ type PowerEvent<'del, 'args
      member self.RemoveHandler handler =
        self.target <- downcast Delegate.Remove (self.target, handler)
 
-  // Публикация события без синхронизации подписки/отписки
+  // Expose the event without synchronizing subscription changes.
   member self.Publish = self :> IDelegateEvent<'del>
 
-  // Публикация события c синхронизацией подписки/отписки
+  // Expose the event with lock-based subscription changes.
   member self.PublishSync =
    { new IDelegateEvent<'del> with
 
@@ -89,8 +89,8 @@ type PowerEvent<'del, 'args
        lock self (fun() ->
             self.target <- downcast Delegate.Remove (self.target, handler)) }
 
-  // Публикация события c механизмом
-  // lock-free синхронизации подписки/отписки
+  // Expose the event with lock-free
+  // synchronization of subscription changes.
   member self.PublishLockFree =
    { new IDelegateEvent<'del> with
 
@@ -109,19 +109,19 @@ type PowerEvent<'del, 'args
        loop self.target }
 ```
 
-Данный класс предлагает несколько политик синхронизации подписки:
+The class offers three ways to manage subscriptions:
 
-* Без синхронизации вовсе
-* Синхронизация с помощью lock (аналогично C# 3.5 и младше)
-* Lock-free синхронизация (аналогично C# 4.0)
+* Without synchronization
+* With locking, as in C# versions before 4.0
+* With lock-free synchronization, as in C# 4.0
 
-А так же несколько политик возбуждения событий:
+It also provides three ways to invoke the handlers:
 
-* Синхронно (последовательные вызовы подписчиков, ожидание окончания их работы)
-* Асинхронно (последовательные вызывы подписчиков, но в другом потоке и не дожидаясь окончания их работы)
-* Асинхронно и по возможности параллельно (не ожидая окончания работы подписчиков на событие)
+* Synchronously: invoke handlers in sequence and wait for them to finish.
+* Asynchronously: invoke handlers in sequence on another thread, without waiting for them to finish.
+* Asynchronously with parallel execution where possible, without waiting for the handlers to finish.
 
-Использовать практически так же, как обычные события F#:
+Usage is similar to ordinary F# events:
 
 ```fsharp
 type Foo() =
@@ -134,4 +134,4 @@ type Foo() =
     [<CLIEvent>] member this.Event3 = event.PublishLockFree
 ```
 
-К сожалению, серъёзному тестированию код не подвергался, так что используйте на свой страх и риск.
+This is a prototype and has not been thoroughly tested.
