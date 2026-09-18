@@ -1,48 +1,50 @@
 ---
 layout: post
-title: "C# CachedAnonymousMethodDelegate"
+title: "C# delegate instances caching (part 1)"
 date: 2010-10-15 01:25:47
 author: Aleksandr Shvedov
 tags: csharp delegate cache csc
 ---
-Попытаюсь немного осветить такую мутную тему, как кэширование экземпляров делегатов компилятором С#.
+I'd like to clarify when the C# compiler caches delegate instances.
 
-Не смотря на то, что делегаты нынче вызываются приблизительно так же быстро, как вызовы методов через интерфейс, существует проблема производительности *создания экземпляров делегатов*. Вообще говоря, “проблема” - это как-то громко звучит, на самом деле заметная деградация производительности может проявиться только на performance critical участках кода, в обычной разработке думать об этом вовсе не следует. Много ссылок по данной теме выкладывали недавно [в этом топике](http://rsdn.ru/forum/dotnet/3995281.flat.aspx) на rsdn.
+Although invoking a delegate is roughly as fast as calling a method through an interface, *creating delegate instances* has a cost. In practice, that cost is usually only noticeable in performance-critical code and is rarely a concern in ordinary application development. Several relevant references were recently collected in [this RSDN discussion](http://rsdn.ru/forum/dotnet/3995281.flat.aspx).
 
-Интерес представляет поведение и генерируемый компилятором код, поэтому рассмотрим такой метод, содержащий лямбда-выражение:
+The interesting part is the compiler's behavior and the code it generates. Consider this method containing a lambda expression:
 
 ```c#
-static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source) {
+static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source)
+{
   return source.Where(x => x.IsDeveloper);
 }
 ```
 
-Эта запись для многих выглядит очень “натурально” и как-то совершенно забывается, что на самом деле здесь создаётся экземпляр типа делегата:
+The syntax is familiar enough that it is easy to overlook the delegate instance involved. Making the delegate construction explicit gives:
 
 ```c#
-static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source) {
+static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source)
+{
   return source.Where(new Func<Person, bool>(x => x.IsDeveloper));
 }
 ```
 
-В данном примере лямбда-выражение не замыкается на какие-либо внешние переменные, this или поля, поэтому оно может быть (и будет) эффективно скомпилировано в виде обычного статического метода. Тогда возникает вопрос - зачем каждый раз создавать экземпляр делегата? Ведь делегаты в .NET являются неизменяемыми и несколько экземпляров делегатов на один и тот же *статический* метод абсолютно *взаимозаменяемы*. Компилятор C# использует это знание и применяет в данном случае кэширование экземпляра в статическом поле, реально скомпилированный код выглядит примерно вот так:
+In this example, the lambda does not capture any local variables or require access to `this`, so the compiler can turn it into an ordinary static method. There is therefore no need to allocate a new delegate on every call: delegates are immutable, and instances referring to the same static method are equivalent in behavior. The C# compiler takes advantage of this by caching the delegate in a static field. The generated code is approximately equivalent to the following:
 
 ```c#
 [CompilerGenerated]
 static Func<Person, bool> CS9_CachedAnonymousMethodDelegate1;
 
-static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source) {
+static IEnumerable<Person> FilterDevelopers(this IEnumerable<Person> source)
+{
   return source.Where(
     CS9_CachedAnonymousMethodDelegate1 != null
       ? CS9_CachedAnonymousMethodDelegate1
       : (CS9_CachedAnonymousMethodDelegate1 =
-                  new Func<Person, bool>(x => x.IsDeveloper)));
+          new Func<Person, bool>(x => x.IsDeveloper)));
 }
-
 ```
 
-Данное кэширование применяется при создании экземпляров делегатов из любых статических методов, лямбда-выражение выше - лишь частный случай такого метода.
+This optimization applies to the non-capturing lambda shown here. It should not be generalized to all delegates referring to static methods: the C# compiler at the time of writing does not apply the same caching to ordinary method group conversions.
 
-Долгое время я считал, что в случае появления любого замыкания, кэширование становится неприменимо (экземпляры делегатов из лямбда-выражений/анонимных методов, замыкающихся на внешний контекст, не являются взаимозаменяемыми). Однако оказалось, что статические методы - не единственный случай кэширования, подробнее - в следующих постах.
+For a long time, I assumed that capturing any state would make caching impossible, since delegates created from lambdas or anonymous methods with different captured contexts are not interchangeable. It turns out that static methods are not the only case where caching is possible. I'll cover the other cases in later posts.
 
-Важно помнить, что описанное кэширование - это implementation detail компилятора в чистом виде, ни в коем случае нельзя строить логику на описанных выше эффектах (ссылочное равенство создаваемых делегатов), хотя это может открыть некоторые забавные возможности…
+Delegate caching is strictly a compiler implementation detail. Program correctness must not depend on whether the compiler reuses a delegate instance, or on reference equality between delegates produced by repeated evaluations of the same expression.

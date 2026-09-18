@@ -4,8 +4,8 @@ title: "Async cube"
 date: 2010-10-12 00:41:56
 author: Aleksandr Shvedov
 ---
-Не могу сюда не положить:
+I had to share this diagram:
 
-![]({{site.baseurl}}/images/async-cube.jpg)
+![The async cube, relating values and sequences through push/pull and producer/consumer dualities.]({{site.baseurl}}/images/async-cube.jpg)
 
-Огромное списибо [Мите Ломову](https://twitter.com/mulambda), что когда-то выложил эту картинку - она навсегда изменила мое понимание `IEnumerable`/`IObservable`, позволила увидеть дуальности, в голове сложилась полная картина.
+Many thanks to [Dmitry Lomov](https://twitter.com/mulambda) for sharing it. It changed how I think about `IEnumerable` and `IObservable`, made the dualities clear, and helped me see the whole picture.

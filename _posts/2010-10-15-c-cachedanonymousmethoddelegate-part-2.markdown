@@ -1,47 +1,54 @@
 ---
 layout: post
-title: "C# CachedAnonymousMethodDelegate (part 2)"
+title: "C# delegate instances caching (part 2)"
 date: 2010-10-15 11:26:07
 author: Aleksandr Shvedov
 tags: csharp cache delegate anonymous
 ---
-На самом деле, кэширование экземпляров делегатов из статических методов - не единственный случай применения подобной оптимизаций компилятором C#.
+The delegate caching described in the previous post is not limited to non-capturing lambdas compiled into static methods.
 
-Рассмотрим такой код:
+Consider the following code:
 
 ```c#
-static void ShowDevelopersBySkill(IEnumerable teams, int level) {
-  foreach (var team in teams) {
+static void ShowDevelopersBySkill(IEnumerable<Team> teams, int level)
+{
+  foreach (var team in teams)
+  {
     team.ShowBy(dev => dev.Skill >= level);
   }
 }
 ```
 
-Здесь лямбда-выражение замыкается на внешний контекст - параметр метода. Компилятор C# в данном случае генерирует closure-класс, который выглядит примерно так (имена изменены для большей читаемости):
+Here, the lambda captures a method parameter. The C# compiler generates a closure class that looks approximately like this, with names simplified for readability:
 
 ```c#
 [CompilerGenerated]
-private sealed class DisplayClass1 {
+private sealed class DisplayClass1
+{
   public int level;
 
-  public bool ShowDevelopersBySkill(Developer dev) {
+  public bool ShowDevelopersBySkill(Developer dev)
+  {
     return dev.Skill >= level;
   }
 }
 ```
 
-Один раз замкнувшись на параметр, мы продлеваем его срок жизни на неопределённый срок, поэтому все обращения к параметру внутри метода заменяются на обращение к полю closure-класса, инициализируемому в во время создания экземпляра closure-класса.
+Capturing the parameter allows it to outlive the method invocation. The compiler moves its storage into a field of the closure object, initializes that field from the argument, and redirects accesses to the captured parameter through the field.
 
-В первом листинге кода можно обратить внимание на то, что требуется создавать экземпляр делегата для вызова `FilterBy()` на каждой итерации внешнего цикла. Однако реально все создаваемые делегаты будут замыкаться на одну и ту же переменную level и могут разделять между собой один и тот же closure-класс, а значит можно обойтись и одним экземпляром делегата. Компилятор C# обнаруживает данную ситуацию и генерирует следующий код:
+At first glance, the call to `ShowBy()` in the loop appears to require a new delegate on every iteration. Within a single method invocation, however, all these delegates capture the same `level` variable and refer to the same closure object. One delegate instance is therefore sufficient. The C# compiler recognizes this case and generates code equivalent to the following:
 
 ```c#
-static void ShowDevelopersBySkill(IEnumerable<Team> teams, int level) {
+static void ShowDevelopersBySkill(IEnumerable<Team> teams, int level)
+{
   Func<Developer, bool> CachedAnonymousMethodDelegate1 = null;
   var closureLocal = new DisplayClass1();
   closureLocal.level = level;
 
-  foreach (var team in teams) {
-    if (CachedAnonymousMethodDelegate1 == null) {
+  foreach (var team in teams)
+  {
+    if (CachedAnonymousMethodDelegate1 == null)
+    {
       CachedAnonymousMethodDelegate1 =
         new Func<Developer, bool>(closureLocal.ShowDevelopersBySkill);
     }
@@ -51,6 +58,6 @@ static void ShowDevelopersBySkill(IEnumerable<Team> teams, int level) {
 }
 ```
 
-То есть все вызовы `FilterBy()` на каждой итерации цикла на самом деле разделяют один и тот же экземпляр делегата, создаваемый при первой итерации и сохраняемый в локальной переменной.
+All calls to `ShowBy()` within the loop share one delegate instance. It is created on the first iteration and cached in a local variable for the remaining iterations. The cache is local to this invocation of `ShowDevelopersBySkill()`.
 
-Однако данная оптимизация неприменима в общем случае для делегатов на любые методы экземпляров, компилятор C# идёт на такие ухищрения только для анонимных методов и лямбда-выражений, когда может быть уверен, что создаваемые делегаты будут создаваться несколько раз и будут разделять между собой один и тот же closure-класс.
+This is not a general optimization for delegates bound to arbitrary instance methods. The compiler applies it to anonymous methods and lambda expressions when it can determine that repeated evaluations will produce delegates referring to the same closure object.

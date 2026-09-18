@@ -5,14 +5,20 @@ date: 2010-10-20 01:13:00
 author: Aleksandr Shvedov
 tags: csharp serialization surrogate yield
 ---
-Тяжёлая жизнь довела меня до того, что мне потребовалось сериализовать итераторы C#. Проблема в том, что компилятор C# не считает должным вешать атрибут `[Serializable]` на генерируемые для итераторов классы (а так же на классы-замыкания для лямбда-выражений и анонимных методов). В F# подобной проблемы не существует:
+I needed to serialize a C# iterator. The obstacle is that the C# compiler does not mark its generated iterator classes with `[Serializable]`. The same applies to the closure classes generated for lambdas and anonymous methods. The corresponding F# types do not have this restriction:
 
 ```fsharp
-let xs = seq { yield 1 } in xs.GetType().IsSerializable // true
+let xs =
+    seq
+        {
+            yield 1
+        }
+
+xs.GetType().IsSerializable // true
 id.GetType().IsSerializable // true
 ```
 
-Один из вариантов решения проблемы - использовать объект-суррогат, подменяющий несериализуемый объект и описывающий корректный процесс сериализации / десериализации объекта. Самая простая реализация - проход рефлексией по полям объекта и сохранение их в объект `SerializationInfo` (вообщем-то нам ничего другого и не остаётся сделать, так как реальный тип итератора недоступен). Пример реализации:
+One way to handle this is to use a serialization surrogate, which supplies the serialization and deserialization logic for a type that does not provide it itself. A simple implementation uses reflection to enumerate the object's fields and store their values in `SerializationInfo`. Since the compiler-generated iterator type cannot be referenced directly in source code, reflection provides a way to inspect its state:
 
 ```c#
 using System;
@@ -24,9 +30,11 @@ sealed class AnySurrogate : ISerializationSurrogate
   const BindingFlags AllFields =
     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
-  public void GetObjectData(object obj, SerializationInfo info, StreamingContext context) {
+  public void GetObjectData(object obj, SerializationInfo info, StreamingContext context)
+  {
     Type objType = obj.GetType();
-    foreach (var field in objType.GetFields(AllFields)) {
+    foreach (var field in objType.GetFields(AllFields))
+    {
       info.AddValue(
         field.Name,
         field.GetValue(obj),
@@ -34,18 +42,26 @@ sealed class AnySurrogate : ISerializationSurrogate
     }
   }
 
-  public object SetObjectData(object obj, SerializationInfo info, StreamingContext context, ISurrogateSelector selector) {
+  public object SetObjectData(
+    object obj,
+    SerializationInfo info,
+    StreamingContext context,
+    ISurrogateSelector selector)
+  {
     Type objType = obj.GetType();
-    foreach (var serializedValue in info) {
+    foreach (var serializedValue in info)
+    {
       var field = objType.GetField(serializedValue.Name, AllFields);
-      if (field == null) {
+      if (field == null)
+      {
         throw new SerializationException(string.Format(
-          "Field '{0}' is not founded in target type.", serializedValue.Name));
+          "Field '{0}' was not found in the target type.", serializedValue.Name));
       }
 
-      if (field.FieldType != serializedValue.ObjectType) {
+      if (field.FieldType != serializedValue.ObjectType)
+      {
         throw new SerializationException(string.Format(
-          "Field '{0}' with type '{1}' is not matched with the target field type of '{2}'.",
+          "Serialized field '{0}' has type '{1}', but the target field has type '{2}'.",
           serializedValue.Name, serializedValue.ObjectType, field.FieldType));
       }
 
@@ -57,52 +73,57 @@ sealed class AnySurrogate : ISerializationSurrogate
 }
 ```
 
-Пример использования:
+Here is an example of using the surrogate:
 
 ```c#
 using System;
-using System.Collections.Generic;
+using System.Collections;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 
-class Foo {
-  static IEnumerator Bar() {
+class Foo
+{
+  static IEnumerator Bar()
+  {
     var now = DateTime.Now;
 
     yield return now.Ticks;
     yield return now.Ticks;
   }
 
-  static void Main() {
+  static void Main()
+  {
     var e1 = Bar();
 
-    // создаём экземпляр итератора
+    // Create a surrogate selector.
     var selector = new SurrogateSelector();
 
     selector.AddSurrogate(
-      type: e1.GetType(), // реальный тип итератора
+      type: e1.GetType(), // The compiler-generated iterator type.
       context: new StreamingContext(
-        StreamingContextStates.All), // это важно!
-      surrogate: new AnySurrogate() // экземпляр суррогата
+        StreamingContextStates.All), // Include all serialization contexts.
+      surrogate: new AnySurrogate() // The surrogate instance.
     );
 
-    using (var mem = new MemoryStream()) {
-      var binary = new BinaryFormatter {
+    using (var mem = new MemoryStream())
+    {
+      var binary = new BinaryFormatter
+      {
         SurrogateSelector = selector
       };
 
-      e1.MoveNext(); // первый yield return
+      e1.MoveNext(); // First yield return.
       Console.WriteLine(e1.Current);
 
-      // сериализуем экземпляр итератора
+      // Serialize the iterator instance.
       binary.Serialize(mem, e1);
       mem.Position = 0;
 
-      // десериализуем экземпляр итератора
+      // Deserialize the iterator instance.
       var e2 = (IEnumerator)binary.Deserialize(mem);
 
-      e2.MoveNext(); // второй yield return
+      e2.MoveNext(); // Second yield return.
       Console.WriteLine(e2.Current);
       Console.WriteLine(e2.MoveNext()); // false
     }
@@ -110,4 +131,4 @@ class Foo {
 }
 ```
 
-Похоже на то, что реализовав `ISurrogateSelector`, можно избавиться от необходимости в задании типа объекта при добавлении объекта-суррогата и сериализовать что угодно, не отмеченное `[Serializable]`, но это уже другая история…
+A custom implementation of `ISurrogateSelector` could select a surrogate automatically, removing the need to register each concrete type explicitly. This would extend the approach to other types that are not marked with `[Serializable]`.
