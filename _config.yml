@@ -5,6 +5,12 @@ description: >
 baseurl: ""
 url: "http://controlflow.github.io"
 
+giscus:
+  repo: "controlflow/controlflow.github.io"
+  repo_id: "MDEwOlJlcG9zaXRvcnkzMzA5NDY4NA=="
+  category: "Announcements"
+  category_id: "DIC_kwDOAfj8HM4DF6ph"
+
 lsi: false
 safe: true
 markdown: kramdown
