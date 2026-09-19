@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "F# async + event-based asynchronous pattern"
+title: "F# async: event-based asynchronous pattern"
 date: 2010-11-24 03:37:00
 author: Aleksandr Shvedov
 tags: fsharp csharp async workflow event-based asynchronous pattern
@@ -43,6 +43,7 @@ private static void AsyncDownloadGoogle()
   
   // Allow the user to cancel the operation.
   Console.WriteLine("Press [esc] to cancel");
+
   var key = Console.ReadKey(true);
   if (key.Key == ConsoleKey.Escape)
   {
