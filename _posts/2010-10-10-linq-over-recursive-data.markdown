@@ -61,24 +61,24 @@ public static class RecExtensions
       IEnumerator<T> e = null;
       while (true)
       {
-        // Obtain a new enumerator when needed.
+        // obtain a new enumerator when needed
         if (e == null)
           e = source.GetEnumerator();
 
         try
         {
-          // Advance the current enumerator.
+          // advance the current enumerator
           while (e.MoveNext())
           {
             var o = e.Current;
             yield return o;
 
-            // Descend into the child sequence when requested.
+            // descend into the child sequence when requested
             if (predicate(o))
             {
               source = selector(o);
 
-              // Suspend the current enumerator until the children are processed.
+              // suspend the current enumerator until the children are processed
               list = new EnumList<T>(e, list);
               e = null;
 
@@ -88,15 +88,15 @@ public static class RecExtensions
         }
         finally
         {
-          // Dispose the current enumerator unless it has been suspended.
+          // dispose the current enumerator unless it has been suspended
           if (e != null)
             e.Dispose();
         }
 
         if (e == null)
-          continue; // Start enumerating the child sequence.
+          continue; // start enumerating the child sequence
         if (list == null)
-          break; // No suspended enumerators remain.
+          break; // no suspended enumerators remain
         else
         {
           e = list.Enumerator;
@@ -106,14 +106,14 @@ public static class RecExtensions
     }
     finally
     {
-      // Dispose all suspended enumerators, even if disposing
-      // the current enumerator threw an exception.
+      // dispose all suspended enumerators, even if disposing
+      // the current enumerator threw an exception
       DisposeRec(list);
     }
   }
 
-  // Dispose the enumerator stack in order, ensuring that an exception
-  // from one enumerator does not prevent disposal of the others.
+  // dispose the enumerator stack in order, ensuring that an exception
+  // from one enumerator does not prevent disposal of the others
   static void DisposeRec<T>(EnumList<T> xs)
   {
     if (xs != null)

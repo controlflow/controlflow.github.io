@@ -122,8 +122,8 @@ The draft differs substantially from C# 2.0, which brought reified generics into
   ```c#
   class C<T>
   {
-    private class N    { /* Cannot refer to the outer T. */ }
-    private class N<T> { /* Can declare its own T. */ }
+    private class N    { /* cannot refer to the outer T */ }
+    private class N<T> { /* can declare its own T */ }
   }
   ```
 
@@ -173,7 +173,7 @@ The draft differs substantially from C# 2.0, which brought reified generics into
 * GC# had no `struct`, `class`, or `new()` constraints. It also prohibited subtype constraints referring to another type parameter. Note the proposed constraint syntax:
 
   ```c#
-  class C<T, U | T : U> { … } // Invalid in GC#.
+  class C<T, U | T : U> { … } // invalid in GC#
   ```
 
   I see some of these constraints as compromises arising from the C#/CLR type system and the implementation of reified generics. The reflection-based implementation of `new()` was a particular frustration. I wonder whether a different design could have avoided separate `class` and `struct` constraints. Constraints involving another type parameter, though uncommon, are an interesting capability.

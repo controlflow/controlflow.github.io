@@ -105,8 +105,8 @@ let mutable f = (fun() -> 0)
 
 try
   let rec foo : int =
-    f <- (fun() -> foo) // Save a reference to foo in f.
-    failwith "Initialization failed."    // Then throw an exception.
+    f <- (fun() -> foo) // save a reference to foo in f
+    failwith "Initialization failed."    // then throw an exception
 
   printfn "foo = %d" foo
 with e ->

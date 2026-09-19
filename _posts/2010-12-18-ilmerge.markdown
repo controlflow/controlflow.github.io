@@ -26,13 +26,13 @@ Choose *Unload Project* from the console project's context menu and open its `.c
     </ProjectReference>
   </ItemGroup>
 
-  <!-- Add this section. -->
+  <!-- add this section -->
   <ItemGroup>
-    <!-- Specify the path to the library assembly. -->
+    <!-- specify the path to the library assembly -->
     <EmbeddedResource Include="ClassLib\bin\$(Configuration)\ClassLib.dll">
-      <!-- Use the full assembly identity as the resource name. -->
+      <!-- use the full assembly identity as the resource name -->
       <LogicalName>ClassLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null</LogicalName>
-      <!-- Hide the resource from the Visual Studio project tree. -->
+      <!-- hide the resource from the Visual Studio project tree -->
       <Visible>false</Visible>
     </EmbeddedResource>
   </ItemGroup>
@@ -58,15 +58,15 @@ class Program
     {
       byte[] rawAssembly;
       
-      // Search the current assembly's embedded resources
-      // for a resource matching the requested assembly identity.
+      // search the current assembly's embedded resources
+      // for a resource matching the requested assembly identity
       var assembly = Assembly.GetExecutingAssembly();
       using (var stream = assembly.GetManifestResourceStream(args.Name))
       {
-        // Return null if the assembly was not found.
+        // return null if the assembly was not found
         if (stream == null) return null;
 
-        // Read the resource into a byte array.
+        // read the resource into a byte array
         rawAssembly = new byte[stream.Length];
         stream.Read(rawAssembly, 0, (int) stream.Length);
       }

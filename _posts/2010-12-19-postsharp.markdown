@@ -91,8 +91,8 @@ private abstract class MemoCache<T, TResult> : MemoCache
 
   static MemoCache()
   {
-    // Check whether values in this cache
-    // are themselves nested caches.
+    // check whether values in this cache
+    // are themselves nested caches
     if (typeof(TResult).IsSubclassOf(typeof(MemoCache)))
     {
       NestedCacheFactory = GetCacheFactory(typeof(TResult));
@@ -105,18 +105,18 @@ private abstract class MemoCache<T, TResult> : MemoCache
   {
     if (NestedCacheFactory == null)
     {
-      // Store the result directly.
+      // store the result directly
       AppendImpl((T) arg[index], (TResult) result);
     }
     else
     {
-      // Create a nested cache.
+      // create a nested cache
       var nested = NestedCacheFactory();
-      AppendImpl( // Store it in the current cache.
+      AppendImpl( // store it in the current cache
         (T) arg[index],
         (TResult) (object) nested);
 
-      // Cache the next argument.
+      // cache the next argument
       nested.AppendItem(arg, index + 1, result);
     }
   }
@@ -179,11 +179,11 @@ The static `CreateInstance()` method supplies the factory delegate used to creat
 /// </summary>
 private static Func<MemoCache> GetCacheFactory(Type cacheType)
 {
-  // Find "public static MemoCache CreateInstance()".
+  // find "public static MemoCache CreateInstance()"
   var methodInfo = cacheType.GetMethod(
     "CreateInstance", BindingFlags.Static | BindingFlags.Public);
 
-  // Create a delegate for subsequent factory calls.
+  // create a delegate for subsequent factory calls
   return (Func<MemoCache>)
     Delegate.CreateDelegate(typeof(Func<MemoCache>), methodInfo);
 }
@@ -241,14 +241,14 @@ private Type GetRootCacheType(MethodInfo method)
   var parameters = method.GetParameters();
   var resultType = method.ReturnType;
 
-  // Choose the cache implementation.
+  // choose the cache implementation
   var cacheType = IsThreadSafe ? typeof(ConcurrentCache<,>) : typeof(DictionaryCache<,>);
 
-  // Visit parameters in reverse order.
+  // visit parameters in reverse order
   for (int i = parameters.Length - 1; i >= 0; i--)
   {
-    // Build "Cache<T1, Cache<T2, Cache<T3, TResult>>>",
-    // where T1, T2, and T3 are the method parameter types.
+    // build "Cache<T1, Cache<T2, Cache<T3, TResult>>>",
+    // where T1, T2, and T3 are the method parameter types
     resultType = cacheType.MakeGenericType(parameters[i].ParameterType, resultType);
   }
 
@@ -273,19 +273,19 @@ public override void OnInvoke(MethodInterceptionArgs args)
   object result = null;
   int index = 0;
 
-  LookupArg: // Look up arguments in successive caches.
+  LookupArg: // look up arguments in successive caches
   if (argCache.TryResolve(arguments[index++], out result))
   {
-    // Before the last argument, the result is another cache.
+    // before the last argument, the result is another cache
     if (index < arguments.Count)
     {
         argCache = (MemoCache) result;
-        goto LookupArg; // Continue with the next argument.
+        goto LookupArg; // continue with the next argument
     }
 
     args.ReturnValue = result;
   }
-  else // On a miss, invoke the method and cache its result.
+  else // on a miss, invoke the method and cache its result
   {
     args.Proceed();
     argCache.AppendItem(arguments, index - 1, args.ReturnValue);

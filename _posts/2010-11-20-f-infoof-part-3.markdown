@@ -86,7 +86,7 @@ let eventof expr =
       && arg1 = var1
       && arg2 = var2 ->
          addHandler.DeclaringType.GetEvent(
-             addHandler.Name.Remove(0, 4), // Event name.
+             addHandler.Name.Remove(0, 4), // event name
              BindingFlags.Public ||| BindingFlags.Instance |||
              BindingFlags.Static ||| BindingFlags.NonPublic)
 

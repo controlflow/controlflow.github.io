@@ -40,8 +40,10 @@ precedence.
   or be invalid for the language version being discussed.
 - Preserve F# snippet indentation exactly. Never apply C# brace-formatting rules
   to F#.
-- Do usually write all comments starting from lowercase letters,
-  do not put period in the end of the comments
+- Start ordinary code comments with a lowercase letter and omit the final
+  period. Preserve the spelling of identifiers, proper names, and abbreviations.
+  XML documentation comments (including C# and F# `///` comments and C#
+  `/** ... */` documentation blocks) are exempt from that style rule.
 
 ## Links, assets, and comments
 

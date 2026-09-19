@@ -89,14 +89,14 @@ class Foo
   {
     var e1 = Bar();
 
-    // Create a surrogate selector.
+    // create a surrogate selector
     var selector = new SurrogateSelector();
 
     selector.AddSurrogate(
-      type: e1.GetType(), // The compiler-generated iterator type.
+      type: e1.GetType(), // the compiler-generated iterator type
       context: new StreamingContext(
-        StreamingContextStates.All), // Include all serialization contexts.
-      surrogate: new AnySurrogate() // The surrogate instance.
+        StreamingContextStates.All), // include all serialization contexts
+      surrogate: new AnySurrogate() // the surrogate instance
     );
 
     using (var mem = new MemoryStream())
@@ -106,17 +106,17 @@ class Foo
         SurrogateSelector = selector
       };
 
-      e1.MoveNext(); // First yield return.
+      e1.MoveNext(); // first yield return
       Console.WriteLine(e1.Current);
 
-      // Serialize the iterator instance.
+      // serialize the iterator instance
       binary.Serialize(mem, e1);
       mem.Position = 0;
 
-      // Deserialize the iterator instance.
+      // deserialize the iterator instance
       var e2 = (IEnumerator)binary.Deserialize(mem);
 
-      e2.MoveNext(); // Second yield return.
+      e2.MoveNext(); // second yield return
       Console.WriteLine(e2.Current);
       Console.WriteLine(e2.MoveNext()); // false
     }

@@ -1,11 +1,11 @@
 ---
 layout: post
-title: "Мемоизация функций F# с аргументами в каррированной форме"
+title: "Memoizing curried functions in F#"
 date: 2010-12-28 01:09:00
 author: Aleksandr Shvedov
 tags: fsharp memoize generics curried closure
 ---
-Сегодня поговорим снова о мемоизации функций, на этот раз применительно к F#. Мемоизация в семействе ML-языков прекрасно выражается в виде функции высшего порядка, принимающую целевую функцию и возвращающую её мемоизированный вариант:
+Let's return to function memoization, this time in F#. In the ML family of languages, memoization fits naturally into a higher-order function that takes a function and returns its memoized version:
 
 ```fsharp
 let memoize f =
@@ -17,7 +17,7 @@ let memoize f =
                   result
 ```
 
-Испытываем:
+Let's try it:
 
 ```fsharp
 let incr x = printfn "incr invoked!"
@@ -30,15 +30,15 @@ printfn "f 2 = %d" (f 2)
 printfn "f 1 = %d" (f 1)
 ```
 
-Вывод:
+Output:
 
-    f invoked!
-    f(1)=2
-    f invoked!
-    f(2)=3
-    f(1)=2
+    incr invoked!
+    f 1 = 2
+    incr invoked!
+    f 2 = 3
+    f 1 = 2
 
-Как и ожидалось, а что насчёт нескольких аргументов, заданных в виде кортежа?
+This works as expected. What about a function whose arguments are passed as a tuple?
 
 ```fsharp
 let add (x,y) = printfn "add invoked!"
@@ -51,7 +51,7 @@ printfn "g (1,2) = %d" (g (1,2))
 printfn "g (1,1) = %d" (g (1,1))
 ```
 
-Вывод:
+Output:
 
     add invoked!
     g (1,1) = 2
@@ -59,7 +59,7 @@ printfn "g (1,1) = %d" (g (1,1))
     g (1,2) = 3
     g (1,1) = 2
 
-Тоже всё ок, так как для типов кортежей определены правила проверки на эквивалентность и вычисления хэш-значения, а значит аргументы в кортеже без проблем находятся в кэше. Но когда дело доходит до функций с аргументами в каррированной форме:
+This works too: tuples support equality and hashing, so the cache can look up a tuple of arguments. But consider a function with curried arguments:
 
 ```fsharp
 let add x y = printfn "add invoked!"
@@ -72,7 +72,7 @@ printfn "g 1 2 = %d" (g 1 2)
 printfn "g 1 1 = %d" (g 1 1)
 ```
 
-То мемоизация перестаёт работать:
+Now repeated calls are no longer avoided:
 
     add invoked!
     g 1 1 = 2
@@ -81,18 +81,18 @@ printfn "g 1 1 = %d" (g 1 1)
     add invoked!
     g 1 1 = 2
 
-Чтобы понять, почему так происходит, достаточно лишь взглянуть на сигнатуры функций `memoize` и `add`:
+To see why, look at the signatures of `memoize` and `add`:
 
 ```fsharp
 val memoize : ('a -> 'b) -> ('a -> 'b) when 'a : equality
 val add : int -> int -> int
 ```
 
-Вспоминаем, что в записи `int -> int -> int` стрелка право-ассоциативна, а значит сигнатура на самом деле выглядит как `int -> (int -> int)`. Получается, что мемоизации подвергается применение *первого* аргумента к функции `add`, то есть в кэше хранятся первые аргументы типа `int` и соответствующие им функции `int -> int`.
+The arrow in `int -> int -> int` is right-associative, so the signature is really `int -> (int -> int)`. Only the application of the *first* argument to `add` is memoized: the cache maps `int` arguments to the corresponding `int -> int` functions.
 
-Решить данную проблему можно следующим образом: если функцию `memoize` будут применять к такой функции, что тип-параметр `'b` будет являться типом функции F#, то перед тем, как сохранять возвращаемое значение в кэш, эту функцию так же следует подвергнуть функции `memoize`. Таким образом мы снова получим “каррированные кэши”, как из [предыдущего поста]({{ site.baseurl }}/2010/12/19/postsharp.html),  то есть при применении аргументов мемоизированная функция `add` будет производить поиск по кэшу первого `int`-аргумента, извлекать из кэша мемоизированную функцию `int -> int`, искать в её кэше второй `int`-аргумент и возвращать значение.
+We can address this by checking the return type when applying `memoize`. If the type parameter `'b` is itself an F# function type, we should memoize the returned function before storing it in the cache. This gives us the same kind of "curried caches" as in the [previous post]({{ site.baseurl }}/2010/12/19/postsharp.html). Applying the first `int` argument to the memoized `add` retrieves a memoized `int -> int` function; applying the second argument looks up the result in that function's cache.
 
-Полная реализация модуля:
+Here is the complete module:
 
 ```fsharp
 module Memoize
@@ -100,68 +100,68 @@ module Memoize
 open System
 open Microsoft.FSharp.Reflection
 
-/// Тип generic-делегата ('a -> 'b)
+/// The generic delegate type ('a -> 'b)
 let private funcDef = typedefof<Func<_,_>>
 
-/// Флаги поиска приватного статического метода
+/// Binding flags for finding a private static method
 let private staticPrivate =
   Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic
 
-/// Тип, параметризуемый типом возвращаемого
-/// значения функции, подвергаемой мемоизации
+/// A type parameterized by the return type
+/// of the function being memoized
 type private AnyMemoizer<'T>() =
 
   static let memo : Func<'T,'T> =
     match typeof<'T> with
 
-    // если возвращаемое значение является функцией F#
+    // if the return value is an F# function
     | t when FSharpType.IsFunction t ->
-      // тип аргумента и возвращаемого значения
+      // get its argument and return types
       let targ, tres = FSharpType.GetFunctionElements t
-      // отражение метода мемоизации,
-      // соответствующее данным типам
+      // find the memoization method
+      // specialized for these types
       let runMethod = typeof<FuncMemoizer>
                         .GetMethod("Run", staticPrivate)
                         .GetGenericMethodDefinition()
                         .MakeGenericMethod [| targ; tres |]
-      // тип делегата, "пропускающего"
-      // через себя возвращаемые значения
+      // a delegate type that transforms
+      // returned function values
       let delType = funcDef.MakeGenericType [| t; t |]
-      // создаём делегат из метода мемоизации
+      // create a delegate for the memoization method
       downcast Delegate.CreateDelegate(delType, runMethod)
 
-    | _ -> null // иначе ничего не делаем
+    | _ -> null // otherwise, no transformation is needed
 
-    // так как let-привязки в определениях типов всегда
-    // private-видимости, то создаём публичный метод
+    // let bindings inside types are always private,
+    // so expose the operation through a public member
     static member Run(x: 'T) = memo.Invoke x
 
-/// Тип, содержащий generic-метод мемоизации
+/// A type containing the generic memoization method
 and private FuncMemoizer =
 
   static member Run (f: 'a -> 'b) =
     let cache = Collections.Generic.Dictionary()
 
-    // если возвращаемое значение - функция F#
+    // if the return value is an F# function
     if FSharpType.IsFunction typeof<'b> then
       fun x -> match cache.TryGetValue x with
                | true, result -> result
-               | _ -> // мемоизация возвращаемой функции
+               | _ -> // memoize the returned function
                       let result = AnyMemoizer<'b>.Run(f x)
                       cache.Add(x, result)
                       result
-    else // иначе обычная мемоизация
+    else // otherwise, use ordinary memoization
       fun x -> match cache.TryGetValue x with
                | true, result -> result
                | _ -> let result = f x
                       cache.Add(x, result)
                       result
 
-/// Мемоизация функций с аргументами в каррированной форме
+/// Memoize a function with curried arguments
 let curried f = FuncMemoizer.Run f
 ```
 
-Пробуем применить:
+Let's try it:
 
 ```fsharp
 let add x y = printfn "add invoked!"
@@ -174,7 +174,7 @@ printfn "g 1 2 = %d" (g 1 2)
 printfn "g 1 1 = %d" (g 1 1)
 ```
 
-Вывод:
+Output:
 
     add invoked!
     g 1 1 = 2
@@ -182,7 +182,7 @@ printfn "g 1 1 = %d" (g 1 1)
     g 1 2 = 3
     g 1 1 = 2
 
-Теперь всё работает как и ожидалось, давайте задумаемся о недостатках… Самый большой недостаток данной реализации в том, что невозможно контролировать глубину мемоизации. То есть если исходная мемоизируемая функция с аргументами в каррированной форме возвращает другие функции, то они тоже будут мемоизированы:
+The repeated call now uses the cached result. There are limitations, though. The main one is that we cannot control how deeply memoization proceeds. If a curried function returns another function, that returned function will be memoized too:
 
 ```fsharp
 let func x y =
@@ -195,14 +195,14 @@ printfn "(f 1 2) 3 = %d" ((f 1 2) 3)
 printfn "(f 1 2) 3 = %d" ((f 1 2) 3)
 ```
 
-Вывод:
+Output:
 
 ```
 lambda invoked!
 (f 1 2) 3 = 6
 (f 1 2) 3 = 6
 ```
-То есть возвращаемая функция так же подвергается мемоизации, а это может не требоваться. Исправить этот недостаток достаточно легко, введя для функции `memoize` параметр глубины и передавая его во вложенные вызовы `memoize`. Реализация доступна [здесь](http://pastebin.com/mJXGMF6d), демонстрация:
+Memoizing the returned function may not be what we want. We can address this by adding a depth parameter to the memoization function and passing the remaining depth to each nested call. An implementation is available [here](http://pastebin.com/mJXGMF6d). This example shows the difference:
 
 ```fsharp
 let func x y =
@@ -222,7 +222,7 @@ printfn "(g 1 2) 3 = %d" ((g 1 2) 3)
 printfn "(g 1 2) 3 = %d" ((g 1 2) 3)
 ```
 
-Вывод:
+Output:
 
     3 args =======
     func invoked!
@@ -236,7 +236,7 @@ printfn "(g 1 2) 3 = %d" ((g 1 2) 3)
     lambda invoked!
     (g 1 2) 3 = 6
 
-Ещё один небольшой недостаток данной реализации - использование памяти. Дело в том, что во всех кэшах, кроме самых внешних, хранится функция с частично применёнными аргументами в замыкании + те же аргументы являются ключами словарей. Это легко увидеть в отладчике VisualStudio на таком коде:
+Another drawback is memory usage. In the inner layers, memoized functions retain partially applied arguments through closures, while those arguments also serve as dictionary keys. We can see how partial application retains its arguments by stepping through this example in the Visual Studio debugger:
 
 ```fsharp
 let f a b c d e f =
@@ -252,6 +252,6 @@ let ff = fe 6
 
 ![]({{ site.baseurl }}/images/fsharp-memoize.png)
 
-То есть замыкание, получаемое при частичном применении аргумента, содержит этот аргумент в поле + ссылку на исходное значение функционального типа.
+Each closure produced by partial application stores the supplied argument in a field, along with a reference to the function being partially applied.
 
-В следующий раз поговорим о ещё более ненормальном способе мемоизации в F# :)
+Next time, we'll look at another approach to memoization in F#.

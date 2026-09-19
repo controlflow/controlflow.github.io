@@ -23,26 +23,26 @@ open System.Threading
 
 [<Sealed>]
 type PowerEvent<'del, 'args
-     when 'del :  not struct                  // Reference type.
-      and 'del :  delegate<'args, unit>  // Delegate signature.
-      and 'del :> Delegate        // Derives from System.Delegate.
-      and 'del :  null>() =         // Supports null.
+     when 'del :  not struct             // reference type
+      and 'del :  delegate<'args, unit>  // delegate signature
+      and 'del :> Delegate               // derives from System.Delegate
+      and 'del :  null>() =              // supports null
 
   [<DefaultValue>]
   val mutable private target : 'del
 
-  // Create an invoker for delegates of type 'del.
+  // create an invoker for delegates of type 'del
   static let invoker : Action<_,_,_> =
     downcast Delegate.CreateDelegate(
       typeof<Action<'del, obj, 'args>>, typeof<'del>.GetMethod "Invoke")
 
-  // Invoke the event handlers synchronously.
+  // invoke the event handlers synchronously
   member self.Trigger (sender: obj, args: 'args) =
      match self.target with
      null    -> ()
    | handler -> invoker.Invoke (handler, sender, args)
 
-  // Invoke the event handlers asynchronously.
+  // invoke the event handlers asynchronously
   member self.TriggerAsync (sender: obj, args: 'args) =
      match self.target with
      null    -> ()
@@ -50,7 +50,7 @@ type PowerEvent<'del, 'args
          async { invoker.Invoke (handler, sender, args) }
          |> Async.Start
 
-  // Invoke the event handlers asynchronously, allowing parallel execution.
+  // invoke the event handlers asynchronously, allowing parallel execution
   member self.TriggerParallel (sender: obj, args: 'args) =
      match self.target with
      null    -> ()
@@ -63,7 +63,7 @@ type PowerEvent<'del, 'args
       |> Async.Ignore
       |> Async.Start
 
-  // To avoid creating an IDelegateEvent<'del> wrapper
+  // to avoid creating an IDelegateEvent<'del> wrapper
   // for every subscription or unsubscription, implement
   // the unsynchronized interface directly here:
   interface IDelegateEvent<'del> with
@@ -74,10 +74,10 @@ type PowerEvent<'del, 'args
      member self.RemoveHandler handler =
        self.target <- downcast Delegate.Remove (self.target, handler)
 
-  // Expose the event without synchronizing subscription changes.
+  // expose the event without synchronizing subscription changes
   member self.Publish = self :> IDelegateEvent<'del>
 
-  // Expose the event with lock-based subscription changes.
+  // expose the event with lock-based subscription changes
   member self.PublishSync =
    { new IDelegateEvent<'del> with
 
@@ -89,8 +89,8 @@ type PowerEvent<'del, 'args
        lock self (fun() ->
             self.target <- downcast Delegate.Remove (self.target, handler)) }
 
-  // Expose the event with lock-free
-  // synchronization of subscription changes.
+  // expose the event with lock-free
+  // synchronization of subscription changes
   member self.PublishLockFree =
    { new IDelegateEvent<'del> with
 

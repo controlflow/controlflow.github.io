@@ -16,7 +16,7 @@ private static void AsyncDownloadGoogle()
   DownloadDataCompletedEventHandler completed = null;
   completed = (_, e) =>
   {
-    // Handle the operation's result.
+    // handle the operation's result
     if (e.Cancelled)
     {
       Console.WriteLine("Operation cancelled.");
@@ -31,17 +31,17 @@ private static void AsyncDownloadGoogle()
       Console.WriteLine("Downloaded {0} bytes", page.Length);
     }
     
-    // Unsubscribe from the event.
+    // unsubscribe from the event
     client.DownloadDataCompleted -= completed;
   };
   
-  // Subscribe to the completion event.
+  // subscribe to the completion event
   client.DownloadDataCompleted += completed;
   
-  // Start the asynchronous operation.
+  // start the asynchronous operation
   client.DownloadDataAsync(uri);
   
-  // Allow the user to cancel the operation.
+  // allow the user to cancel the operation
   Console.WriteLine("Press [esc] to cancel");
 
   var key = Console.ReadKey(true);
@@ -76,29 +76,29 @@ type Async with
   /// event (the event-based asynchronous pattern) into an
   /// F# asynchronous computation.
   static member FromEventPattern
-      (completedEvent : IObservable<_>, // Completion event.
-       executeAction  : unit -> unit,   // Start the operation.
-       ?cancelAction  : unit -> unit) = // Cancel the operation.
+      (completedEvent : IObservable<_>, // completion event
+       executeAction  : unit -> unit,   // start the operation
+       ?cancelAction  : unit -> unit) = // cancel the operation
     
-    // Start the operation with the supplied continuations.
+    // start the operation with the supplied continuations
     let comp (onValue, onError, onCancel) =
       let onCancel () =
         onCancel (OperationCanceledException())
       
-      // Subscribe to the operation's completion event.
+      // subscribe to the operation's completion event
       let rec subscription : IDisposable =
         completedEvent.Subscribe {
           new IObserver<#AsyncCompletedEventArgs> with
         
-          // Check the operation's status when the event fires.
+          // check the operation's status when the event fires
           member x.OnNext(args) =
-            use __ = subscription // Unsubscribe on exit.
+            use __ = subscription // unsubscribe on exit
             if args.Cancelled then onCancel ()
             elif args.Error = null then onValue args
                                    else onError args.Error
         
-          // Ordinary events do not call this, but an arbitrary
-          // IObservable<_> may, so handle it as well.
+          // ordinary events do not call this, but an arbitrary
+          // IObservable<_> may, so handle it as well
           member x.OnError(exc) =
             use __ = subscription in onError exc
         
@@ -106,16 +106,16 @@ type Async with
             use __ = subscription in onCancel ()
         }
       
-      try executeAction () // Start the asynchronous operation.
+      try executeAction () // start the asynchronous operation
       with _ ->
-           use __ = subscription // If starting fails,
-           reraise ()            // unsubscribe immediately.
+           use __ = subscription // if starting fails,
+           reraise ()            // unsubscribe immediately
     
-    // Create the asynchronous computation.
+    // create the asynchronous computation
     let operation = Async.FromContinuations comp
     
-    match cancelAction with // If a cancellation action was supplied,
-      | Some action ->    // register it with Async.OnCancel.
+    match cancelAction with // if a cancellation action was supplied,
+      | Some action ->    // register it with Async.OnCancel
              async { use! __ = Async.OnCancel action
                      return! operation }
       | None -> operation
@@ -125,21 +125,21 @@ type Async with
   /// F# asynchronous computation, with support for multiple
   /// concurrent operations.
   static member FromEventPattern
-      (completedEvent : IObservable<_>, // Completion event.
-       executeAction  : obj -> unit, // Start the operation.
-       ?cancelAction  : obj -> unit, // Cancel the operation.
-       ?userToken     : obj) =      // Operation identifier.
+      (completedEvent : IObservable<_>, // completion event
+       executeAction  : obj -> unit, // start the operation
+       ?cancelAction  : obj -> unit, // cancel the operation
+       ?userToken     : obj) =      // operation identifier
 
-    // Create an identifier if none was supplied.
+    // create an identifier if none was supplied
     let token = match userToken with Some token -> token
                                    | None -> new obj()
 
-    // Pass the identifier to the cancellation action, if any.
+    // pass the identifier to the cancellation action, if any
     let cancel = Option.map (fun f () -> f token) cancelAction
 
     Async.FromEventPattern<#AsyncCompletedEventArgs>(
-      completedEvent =      // Filter completion events
-          Observable.filter // by operation identifier.
+      completedEvent =      // filter completion events
+          Observable.filter // by operation identifier
               (fun e -> e.UserState = token) completedEvent,
       ?cancelAction = cancel,
       executeAction = fun() -> executeAction token)
@@ -184,15 +184,15 @@ let asyncDownloadGoogle() =
   use token = new CancellationTokenSource()
   
   let work = async {
-    // Handle cancellation of the async workflow.
+    // handle cancellation of the async workflow
     use! cancel = Async.OnCancel (fun() ->
                         printfn "Operation cancelled.")
 
-    // Run the asynchronous operation and process its result.
+    // run the asynchronous operation and process its result
     try let! page = client.AsyncDownloadData(uri)
         printfn "Downloaded %d bytes" page.Length
 
-    // Handle asynchronous errors.
+    // handle asynchronous errors
     with e -> printfn "Error: %s" e.Message
   }
 

@@ -57,16 +57,16 @@ let propertyof expr =
 let private (|Func|_|) expr =
   let onlyVar = function Var v -> Some v | _ -> None
   match expr with
-    // Function values for methods with no parameters.
+    // function values for methods with no parameters
     | Lambda(arg, Call(target, info, []))
         when arg.Type = typeof<unit> -> Some(target, info)
 
-    // Function values with one argument.
+    // function values with one argument
     | Lambda(arg, Call(target, info, [ Var var ]))
         when arg = var -> Some(target, info)
 
-    // Function values with curried
-    // or tupled arguments.
+    // function values with curried
+    // or tupled arguments
     | Lambdas(args, Call(target, info, exprs))
         when List.choose onlyVar exprs
            = List.concat args -> Some(target, info)
@@ -77,21 +77,21 @@ let private (|Func|_|) expr =
 /// or a function value expression.
 let methodof expr =
   match expr with
-    // Ordinary calls: foo.Bar()
+    // ordinary calls: foo.Bar()
     | Call(_, info, _) -> info
 
-    // Calls and function values through a lambda parameter:
+    // calls and function values through a lambda parameter:
     // fun (x: string) -> x.Substring(1, 2)
     // fun (x: string) -> x.StartsWith
     | Lambda(arg, Call(Some(Var var), info, _))
     | Lambda(arg, Func(Some(Var var), info))
         when arg = var -> info
 
-    // Function values:
+    // function values:
     // someString.StartsWith
     | Func(_, info) -> info
 
-    // Calls and function values through instance expressions:
+    // calls and function values through instance expressions:
     // "abc".StartsWith("a")
     // "abc".Substring
     | Let(arg, _, Call(Some (Var var), info, _))
@@ -115,7 +115,7 @@ let constructorof expr =
   match expr with
     | NewObject(info, _) -> info
 
-    // Get the record constructor.
+    // get the record constructor
     | NewRecord(recordType, _) ->
         match recordType.GetConstructors() with
         | [| info |] -> info

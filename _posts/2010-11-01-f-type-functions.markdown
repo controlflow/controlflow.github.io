@@ -40,7 +40,7 @@ How can we define our own type functions? And why do some require explicit type 
 Defining a type function is rarely necessary in everyday F# code, but the syntax is straightforward: add an explicit type parameter list to a `let` binding that has no value arguments:
 
 ```fsharp
-// The class hierarchy for type 'T
+// the class hierarchy for type 'T
 let typeHierarchy<'T> =
   let rec loop ts (t: System.Type) =
     if t = null then ts
@@ -67,7 +67,7 @@ type Foo =
    member this.ServicesOfType<'T>(name: string) =
      ...
 
-Foo().ServicesOfType("example") // Compiles, but 'T is inferred as obj.
+Foo().ServicesOfType("example") // compiles, but 'T is inferred as obj
 ```
 
 For type functions such as `Seq.empty`, the result type does depend on the type parameter: `Seq.empty<'a>` has type `seq<'a>`. This allows the type argument to be inferred from subsequent use. Consider a simple type function and an attempt to use its result at two different element types:
