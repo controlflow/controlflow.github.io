@@ -1,62 +1,70 @@
 ---
 layout: post
-title: "Особенности компиляции анонимных делегатов/лямбда-выражений в C#"
+title: "How lambda expressions are compiled in C#"
 date: 2011-08-02 14:45:17
 author: Aleksandr Shvedov
 tags: csharp lambda-expressions anonymous delegate clr closure
 ---
-Я думаю, что большинство из .NET-программистов интересовалось как именно устроен синтаксический сахар анонимных делегатов в C# 2.0, а так же лямбда-выражений, появившихся немного позже. В простых случаях анонимные делегаты превращаются в статические методы с приватным уровнем доступа и непроизносимым именем (специально чтобы вы не могли набрать такое же имя в C#), например:
+Most .NET developers have probably wondered how the syntactic sugar of anonymous methods in C# 2.0, and the lambda expressions introduced later, actually works. In simple cases, anonymous methods become private static methods with compiler-generated names that cannot be written as identifiers in C#. For example:
 
 ```c#
-static void HookCancelPress() {
-  Console.CancelKeyPress += delegate { Console.WriteLine("Пока!"); };
+private static void HookCancelPress()
+{
+  Console.CancelKeyPress += delegate { Console.WriteLine("Goodbye!"); };
 }
 ```
 
-Компилируется как обычный приватный статический метод (обратите внимание на возможность опустить список формальных параметров в анонимных делегатах C# 2.0):
+The anonymous method becomes an ordinary private static method. Notice that C# 2.0 allows the parameter list of an anonymous method to be omitted:
 
 ```c#
-static void HookCancelPress() {
+private static void HookCancelPress()
+{
   Console.CancelKeyPress += new ConsoleCancelEventHandler(Program.<Main>b__0);
 }
 
 [CompilerGenerated]
-static void <Main>b__0(object param0, ConsoleCancelEventArgs param1) {
-  Console.WriteLine("пока!");
+private static void <Main>b__0(object param0, ConsoleCancelEventArgs param1)
+{
+  Console.WriteLine("Goodbye!");
 }
 ```
 
-Интересное начинается тогда, когда анонимный делегат/лямбда-выражение начинается замыкаться на внешние переменные (включая параметры методов), тем самым продляя их время жизни. В этих случаях компилятор C# генерирует closure-класс (я предпочитаю его так называть) и переменная, на которую происходит замыкание, становится полем этого класса (далее в примерах кода я заменял названия closure-классов на более читаемые):
+Things get more interesting when an anonymous method or lambda expression captures variables from an enclosing scope, including method parameters, extending their lifetime. In these cases, the C# compiler generates what I call a closure class, and each captured variable becomes a field of that class. In the examples below, I have replaced the generated closure class names with more readable ones:
 
 ```c#
-static IEnumerable<int> MultipleBy(this IEnumerable<int> source, int multiplier) {
+private static IEnumerable<int> MultipleBy(this IEnumerable<int> source, int multiplier)
+{
   return source.Select(x => checked(x * multiplier));
 }
 ```
 
-Компилируется в (обратите внимание на публичность полей closure-класса):
+This compiles to the following code. Notice that the fields of the closure class are public:
 
 ```c#
 [CompilerGenerated]
-sealed class DisplayClass1 {
+sealed class DisplayClass1
+{
   public int multiplier;
 
-  public int <MultipleBy>b__0(int x) {
+  public int <MultipleBy>b__0(int x)
+  {
     return checked(x * this.multiplier);
   }
 }
 
-static IEnumerable<int> MultipleBy(this IEnumerable<int> source, int multiplier) {
+private static IEnumerable<int> MultipleBy(this IEnumerable<int> source, int multiplier)
+{
   DisplayClass1 closure = new DisplayClass1();
   closure.multiplier = multiplier;
   return source.Select(new Func<int, int>(closure.<MultipleBy>b__0));
 }
 ```
 
-Так как время жизни делегата вовсе неизвестно, то переменные, захваченные в замыкание, приходится переносить в кучу (в поле closure-класса, память под который выделяется в куче, а время жизни контроллируется сборщиком мусора). Обратите внимание, что на доступ к полю closure-класса, заменяются не только обращения к переменным внутри анонимного делегата, но и в самом методе. Это необходимо из-за того, что C# у нас язык императивный с изменяемыми переменнами, а значит должна быть возможность изменять переменные внутри делегатов и внешний метод должен “видеть” эти изменения:
+Since the lifetime of a delegate is not known in advance, captured variables have to move to the heap: they become fields of a closure object whose lifetime is managed by the garbage collector. Accesses to these variables are replaced with field accesses both inside the anonymous method and in the enclosing method. This is necessary because C# is an imperative language with mutable variables: the delegate must be able to change a captured variable, and the enclosing method must see that change:
 
 ```c#
-static void MutableClosure() {
+private static void MutableClosure()
+{
   int value = 0;
   Action f = delegate { value++; };
   f();
@@ -64,16 +72,18 @@ static void MutableClosure() {
 }
 ```
 
-Превращается в:
+This becomes:
 
 ```c#
 [CompilerGenerated]
-sealed class DisplayClass1 {
+sealed class DisplayClass1
+{
   public int value;
   public void <Foo>b__0() { this.value++; }
 }
 
-static void MutableClosure() {
+private static void MutableClosure()
+{
   DisplayClass1 closure = new DisplayClass1();
   closure.value = 0;
   Action f = new Action(closure.<Foo>b__0);
@@ -82,61 +92,72 @@ static void MutableClosure() {
 }
 ```
 
-Таким образом, переменная, взятая в замыкание, никогда не выделяется на стеке и обладает небольшим оверхедом при доступе, так как является полем closure-класса. Существуют вырожденные случаи, когда в замыкание попадают только поля класса:
+A captured local is therefore stored in a closure object rather than on the stack, with a small overhead for field access. There is also a simpler case, where the anonymous method only accesses instance fields:
 
 ```c#
-class FooValue {
-  readonly int value;
+class FooValue
+{
+  private readonly int value;
 
-  public FooValue(int value) {
+  public FooValue(int value)
+  {
     this.value = value;
   }
 
-  public Func<int, int> GetBar() {
+  public Func<int, int> GetBar()
+  {
     return x => x * value;
   }
 }
 ```
 
-В этих случаях делегат очень удобно компилируется в метод уровня экземпляра:
+In this case, the anonymous method can simply become an instance method on the existing object:
 
 ```c#
-class FooValue {
-  readonly int value;
+class FooValue
+{
+  private readonly int value;
 
-  public FooValue(int value) {
+  public FooValue(int value)
+  {
     this.value = value;
   }
 
-  public Func<int, int> GetBar() {
+  public Func<int, int> GetBar()
+  {
     return new Func<int, int>(this.<GetBar>b__0);
   }
 
   [CompilerGenerated]
-  private int <GetBar>b__0(int x) {
+  private int <GetBar>b__0(int x)
+  {
     return x * this.value;
   }
 }
 ```
 
-За счёт этого же эффекта, несколько вложенных определений анонимных методов:
+For a similar example, consider these nested anonymous methods:
 
 ```c#
-static void Bar() {
+private static void Bar()
+{
   var value = 1;
-  Action f = delegate {
-    Action g = delegate {
+  Action f = delegate
+  {
+    Action g = delegate
+    {
       Action h = delegate { value++; };
     };
   };
 }
 ```
 
-Могут эффективно компилироваться всего лишь в один closure-класс:
+These can be compiled using just one closure class:
 
 ```c#
 [CompilerGenerated]
-sealed class DisplayClass3 {
+sealed class DisplayClass3
+{
   public int value;
 
   public void <Bar>b__0() { new Action(this.<Bar>b__1); }
@@ -144,50 +165,59 @@ sealed class DisplayClass3 {
   public void <Bar>b__2() { this.value++; }
 }
 
-static void Bar() {
+private static void Bar()
+{
   DisplayClass3 closure = new DisplayClass3();
   closure.value = 1;
   new Action(closure.<Bar>b__0);
 }
 ```
 
-Но стоит взять в замыкание ещё одну переменную, как трансформация лямбда-выражения усложняется:
+Capturing another variable makes the transformation more involved:
 
 ```c#
-class FooValue {
-  readonly int value;
+class FooValue
+{
+  private readonly int value;
 
-  public FooValue(int value) {
+  public FooValue(int value)
+  {
     this.value = value;
   }
 
-  public Func<int, int> GetBar(int delta) {
+  public Func<int, int> GetBar(int delta)
+  {
     return x => x * value + delta;
   }
 }
 ```
 
-Что вызывает генерацию closure-класса:
+This requires a closure class:
 
 ```c#
-class FooValue {
+class FooValue
+{
   [CompilerGenerated]
-  sealed class DisplayClass1 {
+  private sealed class DisplayClass1
+  {
     public FooValue __this;
     public int delta;
 
-    public int <GetBar>b__0(int x) {
+    public int <GetBar>b__0(int x)
+    {
       return x * this.__this.value + this.delta;
     }
   }
 
-  readonly int value;
+  private readonly int value;
 
-  public FooValue(int value) {
+  public FooValue(int value)
+  {
     this.value = value;
   }
 
-  public Func<int, int> GetBar(int delta) {
+  public Func<int, int> GetBar(int delta)
+  {
     DisplayClass1 closure = new DisplayClass1();
     closure.delta = delta;
     closure.__this = this;
@@ -196,12 +226,13 @@ class FooValue {
 }
 ```
 
-То есть в замыкание берутся две переменные - `delta` и `this`. Обратите внимание, что поле `value` объявлено как `readonly`, а значит его значение теоретически можно было бы взять в замыкание вместо ссылки на весь объект `FooValue` (и объект мог бы быть успешно собран сборщиком мусора вне зависимости от существования замыкания). Однако C# так не делает, так как анонимный метод может быть создан в конструкторе ещё до инициализации поля `value`.
+The closure captures both `delta` and `this`. Notice that `value` is a `readonly` field. In principle, the compiler could copy its value into the closure instead of retaining a reference to the entire `FooValue` object, allowing that object to be collected independently of the closure. However, C# does not do this: the anonymous method could be created in a constructor before `value` has been initialized.
 
-Неприятные эффекты начинаются тогда, когда несколько анонимных делегатов в одном методе захватывают одну и ту же переменную:
+An unfortunate side effect appears when several anonymous methods in the same method capture the same variable:
 
 ```c#
-static Func<int> SharedClosure() {
+private static Func<int> SharedClosure()
+{
   var xs = new int[10000000];
   var index = 0;
 
@@ -210,24 +241,28 @@ static Func<int> SharedClosure() {
 }
 ```
 
-Компилятор C# разделяет closure-класс между двумя анонимными делегатами:
+The C# compiler shares one closure object between the two delegates:
 
 ```c#
 [CompilerGenerated]
-sealed class DisplayClass2 {
-  public int[] xs; // <-- !!!!!
+sealed class DisplayClass2
+{
+  public int[] xs; // keeps the array alive
   public int index;
 
-  public void <SharedClosure>b__0() {
+  public void <SharedClosure>b__0()
+  {
     Console.WriteLine(this.xs[this.index]);
   }
 
-  public int <SharedClosure>b__1() {
+  public int <SharedClosure>b__1()
+  {
     return this.index++;
   }
 }
 
-static Func<int> SharedClosure() {
+private static Func<int> SharedClosure()
+{
   DisplayClass2 closure = new DisplayClass2();
   closure.xs = new int[10000000];
   closure.index = 0;
@@ -236,6 +271,6 @@ static Func<int> SharedClosure() {
 }
 ```
 
-Видите проблему? Не смотря на то, что один делегат тут даже вовсе не используется, второй делегат продляет жизнь не только переменной `value`, на которую он замыкается, но ещё и хранит в себе переменную `xs`! Таким образом могут появляться трудноотлавливаемые утечки памяти, ведь пользователь никак не ожидает, что делегат сохраняет в себе ссылку на переменную, которую он вовсе не брал в замыкание. Правильной трансформацией было бы использование двух closure-классов: первый хранил бы в себе переменную `index`, а второй - ссылку на первый closure-класс и переменную `xs`.
+Although the first delegate is never used, the returned delegate keeps both the captured variable `index` and the array referenced by `xs` alive. This can lead to memory retention that is difficult to track down: a delegate unexpectedly retains a reference to a variable it never uses. A better transformation would use two closure classes: one containing `index`, and another containing `xs` and a reference to the first closure object.
 
-Продолжение следует…
+Continue with [How function values are compiled in F#]({{ site.baseurl }}/2011/08/03/fsharp-lambda-compile.html).

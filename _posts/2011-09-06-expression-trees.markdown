@@ -1,31 +1,35 @@
 ---
 layout: post
-title: "Хитрый способ кэширования Expression Trees"
+title: "A trick for caching expression trees"
 date: 2011-09-06 09:00:06
 author: Aleksandr Shvedov
 tags: csharp expressions linq INotifyPropertyChanged mvvm
 ---
-Достаточно часто в .NET-ориентированных блогах я нахожу различные механизмы, построенные с применением C# Expression Trees. Большинство из них предназначены для получения экземпляров `MethodInfo`/`PropertyInfo`/`FieldInfo` по выражениям доступа к методам/свойствам/полям соответственно (ну или просто именам членов классов). Это позволяет, например, при реализации интерфейса `INotifyPropertyChanged` уйти от строковых констант (`OnChanged(“PropertyName”)`) к лямбда-выражениям (`OnChanged(x => x.PropertyName)`), получая при этом проверки уровня компиляции и стойкость к автоматическим рефакторингам.
+I often come across techniques in .NET blogs that use C# expression trees. Most extract a `MethodInfo`, `PropertyInfo`, or `FieldInfo` from an expression that accesses the corresponding member, or simply retrieve the member's name. For example, an implementation of `INotifyPropertyChanged` can replace string literals such as `OnChanged("PropertyName")` with lambda expressions such as `OnChanged(x => x.PropertyName)`, gaining compile-time checks and support for automated refactoring.
 
-Проблема лишь в том, как формируются эти деревья во время выполнения. Например, такой код:
+The problem is how these trees are constructed at runtime. Consider this code:
 
 ```c#
-class Foo {
+class Foo
+{
   public int Value { get; set; }
 
-  public Expression<Func<Foo, int>> Bar() {
+  public Expression<Func<Foo, int>> Bar()
+  {
     return x => x.Value;
   }
 }
 ```
 
-Разворачивается компилятором C# вот в такой (это не валидный код на C#, так как компилятор на уровне IL-кода использует специальные инструкции, позволяющие быстро получить `MethodInfo` по токену метода `get_Value()` , который является `get`-аксессором свойства `Value`. Примерно такой же код мог бы генерировать C#, если бы поддерживал аналоги `typeof()` для методов/свойств/полей):
+The C# compiler expands it into something like the following. This is illustrative pseudocode, not valid C#: the generated IL uses `ldtoken` to obtain a handle to `get_Value()`, the property's getter, and then retrieves its `MethodInfo`. C# could express similar code directly if it supported equivalents of `typeof()` for methods, properties, and fields:
 
 ```c#
-class Foo {
+class Foo
+{
   public int Value { get; set; }
 
-  public Expression<Func<Foo, int>> Bar() {
+  public Expression<Func<Foo, int>> Bar()
+  {
     var parameterExpression = Expression.Parameter(typeof(Foo), "x");
     return Expression.Lambda<Func<Foo, int>>(
       body: Expression.Property(
@@ -38,20 +42,21 @@ class Foo {
 }
 ```
 
-Да, такая портянка исполняется при каждом формировании, казалось-бы, простого лямбда-выражения `x => x.Value`. При этом происходит несколько выделений памяти в куче, а так же множество проверок типов из которых формируется дерево выражения, что мягко говоря, не быстро.
+All of this runs every time the seemingly simple lambda expression `x => x.Value` is converted to an expression tree. It involves several heap allocations and numerous type checks while constructing the tree, so the cost is far from negligible.
 
-В некоторых случаях этот overhead от формирование деревьев приемлем, но не всегда - например, реализацию интерфейса `INotifyPropertyChanged` используют для ViewModel’и в UI-паттерне MVVM (из мира WPF/Silverlight) именно из соображений производительности (вместо использования `DependencyProperty` и наследования от `DependencyObject`), а применение Expression Trees сводит бенефиты на нет.
+This construction overhead is acceptable in some cases, but not all. For example, in the WPF/Silverlight MVVM pattern, one reason to implement `INotifyPropertyChanged` in a view model instead of deriving from `DependencyObject` and using dependency properties is performance. Introducing expression trees can erase that advantage.
 
-Интересно то, что в мире делегатов, компилятор C# при отсутствии замыканий на внешний контекст использует [кэширование делегатов]({{ site.baseurl }}/2010/10/15/c-cachedanonymousmethoddelegate.html), но не существует аналогичного кэширования для деревьев выражений, не смотря на то, что они такие же неизменяемые, как и делегаты .NET (если у вас есть соображения насчёт причин, не позволяющих кэшировать ET так же, как делегаты - милости прошу ко мне в комментарии). О реализации такого кэширования с помощью “грязных хаков” и пойдёт речь далее.
+Interestingly, the C# compiler [caches delegates]({{ site.baseurl }}/2010/10/15/c-cachedanonymousmethoddelegate.html) when they capture no outer variables, but does not apply similar caching to expression trees, even though they are immutable too. If you have thoughts on why expression trees cannot be cached in the same way, please leave a comment. Here, I will explore how to implement such caching with a deliberately unconventional trick.
 
-В качестве “подопытного” возмём метод со всеми необходимыми проверками, возвращающий экземпляр `PropertyInfo` по выражению доступа к свойству некоторого класса:
+Let us start with a method that validates a property-access expression and returns the corresponding `PropertyInfo`:
 
 ```c#
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
 
-public static class Property {
+public static class Property
+{
   public static PropertyInfo Of<T, TProperty>(Expression<Func<T, TProperty>> propertyExpression)
   {
     if (propertyExpression == null)
@@ -69,9 +74,9 @@ public static class Property {
 }
 ```
 
-Весь трюк заключается в том, что можно вместо дерева с типом `Expression<…>` требовать от пользователя обычный делегат с типом `Func< Expression<…> >`, то есть простой метод, возвращающий нужное дерево. Вместо `x => x.Property` следует передавать `() => x => x.Property`. Зачем? Во-первых весь код формирования дерева уезжает в код делегата, уменьшая размер клиентского кода (на уровне IL). Во-вторых делегат можно вызвать лишь один раз, получив дерево выражения и закэшировав его - так как делегат будет закэширован компилятором, то при всех вызовах экземпляр делегата будет одним и тем же и его можно использовать как ключ словаря { делегат => дерево выражения }.
+The trick is to accept an ordinary delegate of type `Func<Expression<…>>` instead of an `Expression<…>` directly: a function that constructs the tree. The caller passes `() => x => x.Property` instead of `x => x.Property`. This moves the tree-construction code into the delegate's method, reducing the amount of IL at the call site. It also lets us invoke the delegate just once and cache the resulting tree. Since the compiler caches the delegate, subsequent calls from that site pass the same instance, which could serve as a key in a dictionary mapping delegates to expression trees.
 
-Однако есть способ обойтись и безо всяких словарей. Итак кэшированный аналог выглядит следующим образом:
+There is also a way to avoid the dictionary entirely. Here is a version that caches the resulting `PropertyInfo`:
 
 ```c#
 using System;
@@ -82,26 +87,27 @@ public static class Property
 {
   public static PropertyInfo FromExpressionCached<T>(Func<Expression<Func<T, object>>> propertyExpression)
   {
-    // если переданный делегат в замыкании хранит наш кэш
+    // check whether the delegate targets our cache holder
     var data = propertyExpression.Target as CachedData;
     if (data != null) return data.CachedValue;
 
-    return FromImpl(propertyExpression); // иначе вычисляем PropertyInfo
+    return FromImpl(propertyExpression); // otherwise, compute the PropertyInfo
   }
 
   private static PropertyInfo FromImpl<T>(Func<Expression<Func<T, object>>> propertyExpression)
   {
-    // если у делегата нет замыкания,
-    // то и у вложенного в него дерева выражения не должно быть
+    // require a delegate with no captured context
+    // so the compiler can cache it in a static field
     if (propertyExpression.Target != null)
       throw new ArgumentException("Delegate should not have any closures.");
     if (!propertyExpression.Method.IsStatic)
       throw new ArgumentException("Delegate should be static.");
 
-    var body = propertyExpression().Body; // вызываем таки делегат
+    var body = propertyExpression().Body; // invoke the delegate
 
-    // из-за object у нас может быть тут лишний боксинг
-    if (body.NodeType == ExpressionType.Convert && body.Type == typeof(object)) {
+    // the object return type may introduce a boxing conversion
+    if (body.NodeType == ExpressionType.Convert && body.Type == typeof(object))
+    {
       body = ((UnaryExpression) body).Operand;
     }
 
@@ -114,15 +120,17 @@ public static class Property
 
     var propInfo = (PropertyInfo) memberExpr.Member;
 
-    // раз делегат у нас статический, то он должен быть закэширован
-    // компилятором в статическом поле типа, в котором он определён
+    // the delegate refers to a static method, so the compiler should
+    // have cached it in a static field of the declaring type
     var declaringType = propertyExpression.Method.DeclaringType;
-    foreach (var fieldInfo in declaringType.GetFields(BindingFlags.Static | BindingFlags.NonPublic)) {
-      // проходимся по всем статическим полям в поисках делегата
-      if (ReferenceEquals(fieldInfo.GetValue(null), propertyExpression)) {
-        // нашёлся - создаём специальный holder для PropertyInfo
+    foreach (var fieldInfo in declaringType.GetFields(BindingFlags.Static | BindingFlags.NonPublic))
+    {
+      // search the static fields for this delegate instance
+      if (ReferenceEquals(fieldInfo.GetValue(null), propertyExpression))
+      {
+        // found it: create a holder for the PropertyInfo
         var cached = new CachedData { CachedValue = propInfo };
-        // заменяем делегат в поле на делегат на stub-метод
+        // replace the cached delegate with one targeting the stub method
         var stub = new Func<Expression<Func<T, object>>>(cached.Stub<T>);
         fieldInfo.SetValue(null, stub);
         return propInfo;
@@ -132,32 +140,37 @@ public static class Property
     throw new InvalidOperationException("Delegate is not cached.");
   }
 
-  // аналог closure-класса, хранящий закэшированное значение
-  private sealed class CachedData {
+  // a closure-like object that holds the cached value
+  private sealed class CachedData
+  {
     public PropertyInfo CachedValue { get; set; }
 
-    public Expression<Func<T, object>> Stub<T>() {
+    public Expression<Func<T, object>> Stub<T>()
+    {
       throw new InvalidOperationException("Should never be called");
     }
   }
 }
 ```
 
-То есть мы вызываем переданный делегат единожды и сохраняем вычисленное значение `PropertyInfo` прямо в поле кэшированного экземпляра делегата! А это значит, что при следующем вызове из клиентского кода нам передадут не исходный делегат, а нашу заглушку, из замыкания которой очень легко достать закэшированное значение (всего один type test)! Не смотря на массивность кода и рефлексию, работает эта штука по сравнению с Expression Trees просто реактивно:
+On the first call, we invoke the supplied delegate, compute the `PropertyInfo`, and replace the compiler-cached delegate with a stub whose target holds that value. The next call from the same site passes our stub instead of the original delegate. Retrieving the cached value then takes just one type test and a property access. Despite the amount of code and the initial use of reflection, this is much faster than constructing an expression tree on every call:
 
 ```c#
 using System;
 using System.Diagnostics;
 using System.Threading;
 
-static class Program {
-  static void Main() {
+static class Program
+{
+  private static void Main()
+  {
     Thread.CurrentThread.Priority = ThreadPriority.Highest;
     const int count = 100000;
 
     var sw = Stopwatch.StartNew();
-    for (var i = 0; i < count; i++) {
-      var p = Property.FromExpression((Stopwatch _) => _.Elapsed);
+    for (var i = 0; i < count; i++)
+    {
+      var p = Property.Of((Stopwatch _) => _.Elapsed);
       GC.KeepAlive(p);
     }
 
@@ -165,7 +178,8 @@ static class Program {
     sw.Reset();
     sw.Start();
 
-    for (var i = 0; i < count; i++) {
+    for (var i = 0; i < count; i++)
+    {
       var p = Property.FromExpressionCached<Stopwatch>(() => _ => _.Elapsed);
       GC.KeepAlive(p);
     }
@@ -175,11 +189,11 @@ static class Program {
 }
 ```
 
-На лаптопе с i3 @ 2533Mhz показывает в среднем следующие результаты, почти три порядка разницы:
+On a laptop with a Core i3 running at 2.533 GHz, I get the following typical results: a difference of almost three orders of magnitude.
 
 ```
 expr: 00:00:01.0867601
 hack: 00:00:00.0014079
 ```
 
-p.s. Ради бога, не используйте это решение в production. Весь этот способ - завязка на implementation details компилятора (кэширование делегатов), мутирование чужих статических переменных и прочее безобразие, непонятно как работающее в многопоточной среде. Код приведён исключительно в образовательных целях и лишь показывает, что кэширование Expression Trees имело бы место в C#.
+Do not use this in production. It depends on compiler implementation details, overwrites compiler-generated static fields, and has unresolved concurrency issues. The code is an experiment intended to demonstrate the potential benefit of expression tree caching in C#.

@@ -1,198 +1,229 @@
 ---
 layout: post
-title: "Что в CLR может выполниться до метода Main()?"
+title: "Is there life before Main?"
 date: 2011-08-06 18:01:00
 author: Aleksandr Shvedov
 tags: cas clr dotnet entry point module reflection.emit sre
 ---
-Вы задумывались когда-нибудь, может-ли некоторый код выполняться до вызова метода `Main()` (точки входа приложения) в .NET-приложении?
+Have you ever wondered whether any code can run before `Main()`, the entry point of a .NET application?
 
-* Самый очевидный вариант - *статический конструктор типа*, определяющего метод точки входа. Не смотря на различные [правила](http://msmvps.com/blogs/jon_skeet/archive/2010/01/26/type-initialization-changes-in-net-4-0.aspx) порядка инициализации статических данных в разных версиях CLR, на практике инициализатор типа всегда вызывается до вызова точки входа, вне зависимости от наличия/доступа к статическим полям:
+1. *Static constructor of the type that declares the entry point.* Although the [rules for type initialization](https://codeblog.jonskeet.uk/2010/01/26/type-initialization-changes-in-net-4-0/) vary between CLR versions, an explicit static constructor runs before the entry point is called, regardless of whether the type has any static fields or whether they are accessed:
 
-```c#
-class Program {
-  static Program() {
-    System.Console.WriteLine("type initializer");
-  }
+   ```c#
+   class Program
+   {
+     static Program()
+     {
+       System.Console.WriteLine("type initializer");
+     }
 
-  static void Main() {
-    System.Console.WriteLine("entry point");
-  }
-}
-```
+     private static void Main()
+     {
+       System.Console.WriteLine("entry point");
+     }
+   }
+   ```
 
-* Второй способ вторгнуться до вызова точки входа - *CAS-атрибуты*. Механизм CAS объявлен deprecated в .NET 4.0, однако продолжает работать (мне на радость), правда вызывая дичайшие тормоза (вызов метода с CAS-атрибутом на 3-4 порядка медленнее, чем вызов обычного метода!). Атрибутом-наследником `CodeAccessSecurityAttribute` можно отметить методы и типы, а так же сборки. Например, можно определить такой атрибут в сборке `CasAssembly.dll`:
+2. *CAS attributes.* Code Access Security was deprecated in .NET 4.0, but it still works, albeit with considerable overhead: calling a method with a CAS attribute can be three or four orders of magnitude slower than an ordinary method call. An attribute derived from `CodeAccessSecurityAttribute` can be applied to methods, types, and assemblies. For example, we can define the following attribute in `CasAssembly.dll`:
 
-```c#
-using System;
-using System.Security;
-using System.Security.Permissions;
+   ```c#
+   using System;
+   using System.Security;
+   using System.Security.Permissions;
 
-[AttributeUsage(
-  AttributeTargets.Assembly | AttributeTargets.Class |
-  AttributeTargets.Struct | AttributeTargets.Constructor |
-  AttributeTargets.Method, AllowMultiple=true, Inherited=false)]
-public sealed class FooAttribute : CodeAccessSecurityAttribute {
-  public FooAttribute(SecurityAction action = SecurityAction.Demand)
-    : base(action) { }
+   [AttributeUsage(
+     AttributeTargets.Assembly | AttributeTargets.Class |
+     AttributeTargets.Struct | AttributeTargets.Constructor |
+     AttributeTargets.Method, AllowMultiple=true, Inherited=false)]
+   public sealed class FooAttribute : CodeAccessSecurityAttribute
+   {
+     public FooAttribute(SecurityAction action = SecurityAction.Demand)
+       : base(action) { }
 
-  public string Level { get; set; }
+     public string Level { get; set; }
 
-  public override IPermission CreatePermission() {
-    Console.WriteLine("cas: {0} level", Level);
-    return null; // не возвращаем ничего
-  }
-}
-```
+     public override IPermission CreatePermission()
+     {
+       Console.WriteLine("cas: {0} level", Level);
+       return null; // return no permission object
+     }
+   }
+   ```
 
-А затем его использовать в приложении `ConsoleApplication.exe`:
+   Then use it in `ConsoleApplication.exe`:
 
-```c#
-using System;
-using System.Security.Permissions;
+   ```c#
+   using System;
+   using System.Security.Permissions;
 
-[assembly: Foo(SecurityAction.RequestMinimum, Level="assembly")]
+   [assembly: Foo(SecurityAction.RequestMinimum, Level="assembly")]
 
-[Foo(Level="type")]
-class Program {
-  [Foo(Level="constructor")]
-  static Program() {
-    Console.WriteLine("type initializer");
-  }
+   [Foo(Level="type")]
+   class Program
+   {
+     [Foo(Level="constructor")]
+     static Program()
+     {
+       Console.WriteLine("type initializer");
+     }
 
-  [Foo(Level="method")]
-  static void Main() {
-    Console.WriteLine("entry point");
-  }
-}
-```
+     [Foo(Level="method")]
+     private static void Main()
+     {
+       Console.WriteLine("entry point");
+     }
+   }
+   ```
 
-То вывод будет следующим:
+   The output is:
 
-```
-cas: assembly level
-cas: type level
-cas: type level
-cas: constructor level
-type initializer
-cas: type level
-cas: type level
-cas: method level
-entry point
-```
+   ```
+   cas: assembly level
+   cas: type level
+   cas: type level
+   cas: constructor level
+   type initializer
+   cas: type level
+   cas: type level
+   cas: method level
+   entry point
+   ```
 
-Отдельная сборка нужна из-за того, что CAS-атрибут уровня сборки требует, чтобы сборка с типом данного атрибута могла быть полностью загружена в момент проверки прав. Проверка уровня типа случается дважды из-за того, что вызов метода требует два права - на обращение к типу и на обращение к конкретному методу, однако обращение к методу возможно только если вызывающая сторона имеет право на доступ к типу.
+   The attribute needs to be in a separate assembly because an assembly-level CAS attribute requires the assembly containing its type to be fully loadable when permissions are checked. The type-level check occurs twice: a method call requires permission to access both the type and the specific method, and checking access to the method also requires access to its declaring type.
 
-Итак мы смогли исполнить произвольный код до статического конструктора Program, в момент загрузки сборки. Однако есть ещё один вариант…
+   We have now executed arbitrary code while the assembly is being loaded, before the static constructor of `Program`. There is another option, too.
 
-* Третий способ - *конструктора модуля*. Что это за зверь, спросите вы? :)) Любое .NET-приложение состоит из сборок, каждая из которых может состоять из модулей. VS позволяет работать только с одномодульными сборками, поэтому многие .NET-программисты не подозревают о существовании модулей. Нужны они для многофайловых сборок, представляющих собой `exe`/`dll`-файл + набор файлов с расширением `.netmodule` (наверняка вы первый раз про такие слышите). Единственный их юзкейс - модули подгружаются отложенно, что может давать бенефиты, если у вас в сборке много ресурсов и они не всегда сразу нужны во время выполнения.
+3. *Module initializers.* Every .NET application consists of assemblies, and each assembly can contain multiple modules. Visual Studio only supports single-module assemblies, so modules are easy to overlook. A multifile assembly consists of an `exe` or `dll` file and a set of `.netmodule` files. One useful property is that modules can be loaded on demand, which may help when an assembly contains many resources that are not all needed immediately.
 
-Так вот, внутри главного из модулей (`dll`/`exe`-файла) всегда существует специальный тип (обычно названный `<Module>`), занимающий первое место в таблице токенов типов. Этот может использоваться (и используется `ilasm`'ом) для глобальных переменных и глобальных методов, если язык предоставляет таковые. Так вот, этот тип может иметь статический конструктор - этот метод и называется конструктором модуля. Исполняется он *после* загрузки сборки, но *до* всякого обращения к типу, определяющего точку входа приложения.
+   The main module, stored in the `dll` or `exe` file, contains a special type, usually called `<Module>`, which occupies the first entry in the type definition table. This type can hold global variables and methods, as `ilasm` allows it to do. It can also have a static constructor: this is the module initializer. It runs *after* the assembly is loaded but *before* code in the module executes, including the static constructor of the type declaring the entry point.
 
-Проверить это мы можем, сгенерировав сборку с конструктором модуля через программный интерфейс генерации кода - `System.Reflection.Emit` (или с помощью компилятора `ilasm`):
+   We can demonstrate this by generating an assembly with a module initializer using `System.Reflection.Emit`, or by writing IL and compiling it with `ilasm`:
 
-```c#
-using System;
-using System.Reflection;
-using System.Reflection.Emit;
+   ```c#
+   using System;
+   using System.Reflection;
+   using System.Reflection.Emit;
 
-static class Program {
-  static void Main() {
-    // создаём динамическую сборку в текущем домене
-    var assemblyBuilder = AppDomain.CurrentDomain
-      .DefineDynamicAssembly(new AssemblyName("FooAssembly"),
-        AssemblyBuilderAccess.RunAndSave);
+   static class Program
+   {
+     private static void Main()
+     {
+       // create a dynamic assembly in the current application domain
+       var assemblyBuilder = AppDomain.CurrentDomain
+         .DefineDynamicAssembly(new AssemblyName("FooAssembly"),
+           AssemblyBuilderAccess.RunAndSave);
 
-    // в динамической сборке определяем единственный модуль
-    const string moduleName = "test.exe";
-    var moduleBuilder = assemblyBuilder
-      .DefineDynamicModule("FooModule", moduleName);
+       // define a single module in the dynamic assembly
+       const string moduleName = "test.exe";
+       var moduleBuilder = assemblyBuilder
+         .DefineDynamicModule("FooModule", moduleName);
 
-    // создаём глобальный метод (контруктор модуля)
-    var cctor = moduleBuilder.DefineGlobalMethod(".cctor",
-      MethodAttributes.RTSpecialName |
-      MethodAttributes.SpecialName   |
-      MethodAttributes.Static, null, null);
+       // create a global method for the module initializer
+       var cctor = moduleBuilder.DefineGlobalMethod(".cctor",
+         MethodAttributes.RTSpecialName |
+         MethodAttributes.SpecialName   |
+         MethodAttributes.Static, null, null);
 
-    var il2 = cctor.GetILGenerator();
-    il2.EmitWriteLine("module initializer");
-    il2.Emit(OpCodes.Ret);
-    moduleBuilder.CreateGlobalFunctions();
+       var il2 = cctor.GetILGenerator();
+       il2.EmitWriteLine("module initializer");
+       il2.Emit(OpCodes.Ret);
+       moduleBuilder.CreateGlobalFunctions();
 
-    // определяем статический класс (в IL это abstract sealed)
-    var fooType = moduleBuilder.DefineType("Program",
-        TypeAttributes.Abstract | TypeAttributes.Sealed);
+       // define a static class, represented as abstract sealed in IL
+       var fooType = moduleBuilder.DefineType("Program",
+           TypeAttributes.Abstract | TypeAttributes.Sealed);
 
-    // определяем статический конструктор
-    var ctorBuilder = fooType.DefineTypeInitializer();
-    var il = ctorBuilder.GetILGenerator();
-    il.EmitWriteLine("type initializer");
-    il.Emit(OpCodes.Ret);
+       // define the static constructor
+       var ctorBuilder = fooType.DefineTypeInitializer();
+       var il = ctorBuilder.GetILGenerator();
+       il.EmitWriteLine("type initializer");
+       il.Emit(OpCodes.Ret);
 
-    // определяем статический метод Main() - точку входа
-    var mainBuilder = fooType.DefineMethod("Main",
-        MethodAttributes.Public | MethodAttributes.Static,
-        CallingConventions.Standard, typeof(void), null);
+       // define the static Main() method as the entry point
+       var mainBuilder = fooType.DefineMethod("Main",
+           MethodAttributes.Public | MethodAttributes.Static,
+           CallingConventions.Standard, typeof(void), null);
 
-    il = mainBuilder.GetILGenerator();
-    il.EmitWriteLine("entry point");
-    il.Emit(OpCodes.Ret);
+       il = mainBuilder.GetILGenerator();
+       il.EmitWriteLine("entry point");
+       il.Emit(OpCodes.Ret);
 
-    fooType.CreateType();
+       fooType.CreateType();
 
-    // задаём точку входа и сохраняем сборку в exe-файл
-    assemblyBuilder.SetEntryPoint(
-      mainBuilder, PEFileKinds.ConsoleApplication);
-    assemblyBuilder.Save(moduleName);
-  }
-}
-```
+       // set the entry point and save the assembly as an exe file
+       assemblyBuilder.SetEntryPoint(
+         mainBuilder, PEFileKinds.ConsoleApplication);
+       assemblyBuilder.Save(moduleName);
+     }
+   }
+   ```
 
-Получаем сборку, запуск которой выводит на экран:
+   Running the generated assembly produces:
 
-```
-module initializer
-type initializer
-entry point
-```
-*— update —*
+   ```
+   module initializer
+   type initializer
+   entry point
+   ```
 
-* Четвёртый способ подсказал знаток недр CLR [@tr_tr_mitya](https://twitter.com/#!/tr_tr_mitya) - *менеджер доменов*. Куда лучше меня про эту штуку подробно [расскажет msdn](http://msdn.microsoft.com/ru-ru/library/system.appdomainmanager.aspx) (и [подобные записи в блогах](http://blogs.msdn.com/b/shawnfa/archive/2004/11/12/256550.aspx)), а я лишь скажу, что это это управляемый аналог хоста CLR. Некоторый специальный тип, управляющий загрузкой сборок и созданием доменов .NET-приложений, а так же отвечающий за некоторые вопросы безопасности и Remoting’а.
+   Update: in a year 2020, the C# 9 added [`[ModuleInitializer]`](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/attributes/general#moduleinitializer-attribute): mark an `internal` or `public` parameterless `static void` method with this attribute. The compiler combines calls to all such methods into one module initializer, which runs once before other code in the module, including `Main()`. No custom assembly emission is needed.
 
-Менеджер доменов представляет собой тип-наследник `System.AppDomainManager`, определённый в подписанной строгим именем сборке, находящейся в GAC. Например:
+4. *Application domain manager.* This option was suggested by CLR expert [@tr_tr_mitya](https://x.com/tr_tr_mitya). The [documentation](https://learn.microsoft.com/en-us/dotnet/api/system.appdomainmanager?view=netframework-4.0) and [this blog post](http://blogs.msdn.com/b/shawnfa/archive/2004/11/12/256550.aspx) explain it in more detail. In brief, it is a managed counterpart to a CLR host: a special type that controls assembly loading and application domain creation, along with some aspects of security and remoting.
 
-```c#
-using System;
+   An application domain manager derives from `System.AppDomainManager` and is defined in a strong-named assembly installed in the GAC. For example:
 
-public class FooDomainManager : AppDomainManager {
-  public override void InitializeNewDomain(AppDomainSetup info) {
-    Console.WriteLine("init domain");
-  }
-}
-```
+   ```c#
+   using System;
 
-Далее различными можно указать данный менеджер для использования в файле `App.config` любого приложения (эта возможность доступна только начиная с .NET 4.0) следующим образом:
+   public class FooDomainManager : AppDomainManager
+   {
+     public override void InitializeNewDomain(AppDomainSetup info)
+     {
+       Console.WriteLine("init domain");
+     }
+   }
+   ```
 
-```xml
-<?xml version="1.0"?>
-<configuration>
-  <runtime>
-    <!-- полное имя сборки с AppDomainManager'ом -->
-    <appDomainManagerAssembly value="DomainManager,
-      Version=1.0.0.0, Culture=neutral, PublicKeyToken=679fb76896252e34"/>
+   Starting with .NET 4.0, an application can select this manager in its `App.config` file:
 
-    <!-- полное имя типа AppDomainManager'а -->
-    <appDomainManagerType value="FooDomainManager"/>
-  </runtime>
-</configuration>
-```
+   ```xml
+   <?xml version="1.0"?>
+   <configuration>
+     <runtime>
+       <!-- full name of the assembly containing the AppDomainManager -->
+       <appDomainManagerAssembly value="DomainManager,
+         Version=1.0.0.0, Culture=neutral, PublicKeyToken=679fb76896252e34"/>
 
-До .NET 4.0 можно было удобно задать `AppDomainManager` лишь глобально - для всей системы, установив переменные окружения (так же возможно задать менеджер через реестр windows или через unmanaged API в случае хостинга CLR внутри неуправляемого приложения):
+       <!-- fully qualified name of the AppDomainManager type -->
+       <appDomainManagerType value="FooDomainManager"/>
+     </runtime>
+   </configuration>
+   ```
 
-```
-set APPDOMAIN_MANAGER_ASM=DomainManager, Version=1.0.0.0, PublicKeyToken=679fb7...
-set APPDOMAIN_MANAGER_TYPE=FooDomainManager
-```
-Код менеджера доменов исполняется вовсе до загрузки сборки нашего приложения, до проверки CAS-атрибутов уровня сборки.
+   Before .NET 4.0, the convenient way to select an `AppDomainManager` was through environment variables, typically set system-wide. It can also be configured through the Windows registry or the unmanaged hosting API when the CLR is hosted in an unmanaged application:
 
-Если вы знаете ещё способы вклиниться в процесс запуска .NET-приложения, то не стесняйтесь написать комментарий :))
+   ```
+   set APPDOMAIN_MANAGER_ASM=DomainManager, Version=1.0.0.0, PublicKeyToken=679fb7...
+   set APPDOMAIN_MANAGER_TYPE=FooDomainManager
+   ```
+   The domain manager runs even before the application assembly is loaded, ahead of the assembly-level CAS checks.
+
+5. *Startup hooks (modern .NET).* The [`DOTNET_STARTUP_HOOKS`](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) environment variable lets you run managed code before the application's entry point without modifying the application. Create a separate assembly, such as `Hook.dll`, containing a type named `StartupHook` in the global namespace:
+
+   ```c#
+   internal static class StartupHook
+   {
+     public static void Initialize()
+     {
+       System.Console.WriteLine("before Main");
+     }
+   }
+   ```
+
+   Then point the runtime to it when launching the application. On Unix:
+
+   ```sh
+   DOTNET_STARTUP_HOOKS=/absolute/path/Hook.dll dotnet App.dll
+   ```
+
+   The runtime calls `StartupHook.Initialize()` synchronously before `Main`, on the same thread. You can specify multiple hook assemblies, separated by `:` on Unix or `;` on Windows; they run in the order listed. This is useful for adding instrumentation or telemetry to an existing application without rebuilding it.
