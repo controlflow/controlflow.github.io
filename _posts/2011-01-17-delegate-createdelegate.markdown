@@ -1,214 +1,180 @@
 ---
 layout: post
-title: "Великий и могучий Delegate.CreateDelegate"
+title: "The mighty Delegate.CreateDelegate"
 date: 2011-01-17 16:19:00
 author: Aleksandr Shvedov
 tags: csharp delegate createdelegate dynamicmethod begininvoke ref valuetype
 ---
-Сегодня хотелось бы поделиться мыслями относительно замечательного метода `System.Delegate.`[`CreateDelegate`](http://msdn.microsoft.com/en-us/library/9tz542wy.aspx), доступного ещё с первых версий .NET Framework. Назначение - создать экземпляр делегата динамически по типу делегата (в виде `System.Type`) и методу, заданному в виде строкового имени или экземпляра `System.Reflection.MethodInfo`. Интерес представляет то, как данный метод позволяет сопоставить те или иные сигнатуры методов различным типам делегатов.
+The [`System.Delegate.CreateDelegate`](https://learn.microsoft.com/en-us/dotnet/api/system.delegate.createdelegate) method has been available since the earliest versions of the .NET Framework. It creates a delegate dynamically from a delegate type, supplied as a `System.Type`, and a method, identified by its name or a `System.Reflection.MethodInfo`. What makes it interesting is the variety of ways it can bind a method to a delegate signature.
 
-Давайте определим класс и структуру следующего вида:
+Consider the following class and struct:
 
 ```c#
-class FooClass {
+class FooClass
+{
   public static void StaticBar(object x) { }
   public string InstanceBar(int x) { return "abc"; }
 }
 
-struct FooStruct {
+struct FooStruct
+{
   public void InstanceBoo(int x) { }
 }
 ```
 
-И посмотрим делегаты какого типа мы можем создать:
+Here are the kinds of delegates we can create:
 
-* **Делегат из статического метода**
+* **A delegate for a static method**
 
-Так же как статически в C# из метода `FooClass.StaticBar` можно создать делегат типа `Action<object>`:
+  In C#, we can create an `Action<object>` delegate from `FooClass.StaticBar` using a method group:
 
-```c#
-Action<object> staticBar = FooClass.StaticBar;
-```
+  ```c#
+  Action<object> staticBar = FooClass.StaticBar;
+  ```
 
-Можно аналогично использовать и `Delegate.CreateDelegate`:
+  The equivalent call to `Delegate.CreateDelegate` is:
 
-```c#
-var staticBar = (Action<object>)
-  Delegate.CreateDelegate(
-    type:   typeof(Action<object>),
+  ```c#
+  var staticBar = (Action<object>) Delegate.CreateDelegate(
+    type: typeof(Action<object>),
     method: typeof(FooClass).GetMethod("StaticBar"));
-```
+  ```
 
-* **Делегат из метода экземпляра**
+* **A delegate for an instance method**
 
-Опять же, аналогично статическому поведению C#:
+  C# also supports binding a delegate to a particular object:
 
-```c#
-Func<int, string> instanceBar1 = new FooClass().InstanceBar;
-```
+  ```c#
+  Func<int, string> instanceBar1 = new FooClass().InstanceBar;
+  ```
 
-Можно создавать делегаты из методов уровня экземпляра, указывая через дополнительный параметр `firstArgument` экземпляр объекта, для которого будет вызываться выбранный метод экземпляра:
+  With `Delegate.CreateDelegate`, the additional `firstArgument` parameter supplies the object on which the instance method will be invoked:
 
-```c#
-var instanceBar = (Func<int, string>) Delegate.CreateDelegate(
-  type:   typeof(Func<int, string>),
-  method: typeof(FooClass).GetMethod("InstanceBar"),
-  firstArgument: new FooClass()); /* <== */
-```
+  ```c#
+  var instanceBar = (Func<int, string>) Delegate.CreateDelegate(
+    type: typeof(Func<int, string>),
+    method: typeof(FooClass).GetMethod("InstanceBar"),
+    firstArgument: new FooClass()); /* <== */
+  ```
 
-Помимо методов уровня экземпляра классов, поддерживаются и методы экземпляров типов-значений, при этом структура будет подвергнута боксингу:
+  Instance methods on value types are supported too. In this case, the struct is boxed:
 
-```c#
-var instanceBoo = (Action<int>) Delegate.CreateDelegate(
-  type:   typeof(Action<int>),
-  method: typeof(FooStruct).GetMethod("InstanceBoo"),
-  firstArgument: new FooStruct()); /* <== */
-```
+  ```c#
+  var instanceBoo = (Action<int>) Delegate.CreateDelegate(
+    type: typeof(Action<int>),
+    method: typeof(FooStruct).GetMethod("InstanceBoo"),
+    firstArgument: new FooStruct()); /* <== */
+  ```
 
-* **Делегат из метода с отличающимся типом параметров**
+* **Contravariant parameter types**
 
-C# статически поддерживает контравариантность типов параметров при создании экземпляров делегатов из *method group*. Например, возможно подписаться методом с сигнатурой:
+  C# supports contravariance in parameter types when converting a *method group* to a delegate. For example, a method with this signature:
 
-```c#
-void Foo(object sender, EventArgs e)
-```
+  ```c#
+  private void Foo(object sender, EventArgs e)
+  ```
 
-на событие, ожидающее делегат типа:
+  can handle an event whose delegate has this signature:
 
-```c#
-void PropertyChangedEventHandler(object sender, PropertyChangedEventArgs e)
-```
+  ```c#
+  void PropertyChangedEventHandler(object sender, PropertyChangedEventArgs e)
+  ```
 
-Так как класс `PropertyChangedEventArgs` является наследником класса `EventArgs`. Аналогично допустимо создать такой делегат, так как `string` является наследником `object`:
+  This works because `PropertyChangedEventArgs` derives from `EventArgs`. Likewise, the following conversion is valid because `string` derives from `object`:
 
-```c#
-Action<string> contravariantParameterType = FooClass.StaticBar;
-```
+  ```c#
+  Action<string> contravariantParameterType = FooClass.StaticBar;
+  ```
 
-`Delegate.CreateDelegate` повторяет статическое поведение C# и тоже поддерживает контравариантность:
+  `Delegate.CreateDelegate` supports the same parameter contravariance:
 
-```c#
-var contravariantParameterType = (Action<string>) Delegate.CreateDelegate(
-  type:   typeof(Action<string>),
-  method: typeof(FooClass).GetMethod("StaticBar"));
-```
+  ```c#
+  var contravariantParameterType = (Action<string>) Delegate.CreateDelegate(
+    type: typeof(Action<string>),
+    method: typeof(FooClass).GetMethod("StaticBar"));
+  ```
 
-* **Делегат из метода с отличающимся типом возвращаемого значения**
+* **Covariant return types**
 
-Аналогично C# поддерживает ковариантность типа возвращаемого значения:
+  C# also supports covariance in the return type:
 
-```c#
-Func<int, object> covariantReturnType = new FooClass().InstanceBar;
-```
+  ```c#
+  Func<int, object> covariantReturnType = new FooClass().InstanceBar;
+  ```
 
-`Delegate.CreateDelegate` не отстаёт:
+  The same conversion works with `Delegate.CreateDelegate`:
 
-```c#
-var covariantReturnType = (Func<int, object>) Delegate.CreateDelegate(
-  type:   typeof(Func<int, object /* <== */>),
-  method: typeof(FooClass).GetMethod("InstanceBar"),
-  firstArgument: new FooClass());
-```
+  ```c#
+  var covariantReturnType = (Func<int, object>) Delegate.CreateDelegate(
+    type: typeof(Func<int, object /* <== */>),
+    method: typeof(FooClass).GetMethod("InstanceBar"),
+    firstArgument: new FooClass());
+  ```
 
-* **Делегат из метода экземпляра ссылочного типа с открытым первым аргументом**
+* **An open instance delegate for a reference type**
 
-Тут всё становится интереснее, так как C# не позволяет создавать такие делегаты статически. Дело в том, что если не указывать экземпляр через параметр `firstArgument` и подобрать тип делегата таковым, чтобы первый аргумент делегата был ссылочного типа, определяющего данный метод, то можно создать экземпляр делегата так, как если бы метод экземпляра был статическим:
+  An open instance delegate exposes the target object as its first argument. C# cannot create one directly through a method group conversion. With `Delegate.CreateDelegate`, we omit `firstArgument` and choose a delegate type whose first parameter is the reference type declaring the method. The instance method can then be called through the delegate as though it were static:
 
-```c#
-var instanceBarAsStatic = (Func<FooClass, int, string>) Delegate.CreateDelegate(
-  type:   typeof(Func<FooClass /* <== */, int, string>),
-  method: typeof(FooClass).GetMethod("InstanceBar"));
-```
+  ```c#
+  var instanceBarAsStatic = (Func<FooClass, int, string>) Delegate.CreateDelegate(
+    type: typeof(Func<FooClass /* <== */, int, string>),
+    method: typeof(FooClass).GetMethod("InstanceBar"));
+  ```
 
-А затем вызывать делегат для различных экземпляров:
+  The same delegate can be invoked on different objects:
 
-```c#
-var foo1 = new FooClass();
-var foo2 = new FooClass();
+  ```c#
+  var foo1 = new FooClass();
+  var foo2 = new FooClass();
 
-instanceBarAsStatic(foo1, 1);
-instanceBarAsStatic(foo2, 2);
-instanceBarAsStatic(null, 3); // NRE?
-```
+  instanceBarAsStatic(foo1, 1);
+  instanceBarAsStatic(foo2, 2);
+  instanceBarAsStatic(null, 3); // null reference exception?
+  ```
 
-Но тут надо быть очень осторожным, так как в случае третьего вызова проверка экземпляра (`this`) на `null` перестаёт действовать:
+  There is a subtle difference from an ordinary C# instance call: the delegate invocation does not automatically check whether the target object (`this`) is `null`. The third call therefore succeeds for this method, which does not access any instance state:
 
-![]({{ site.baseurl }}/images/delegate-create.png)
+  ![]({{ site.baseurl }}/images/delegate-create.png)
 
-Будьте аккуратны ;)
+  Do not rely on this form of invocation to reject a `null` target.
 
-* **Делегат из статического метода с закрытым (фиксированным) первым аргументом ссылочного типа**
+* **A static delegate with a bound first argument**
 
-Теперь провернём предыдущий трюк наоборот: укажем `firstArgument` в случае создания делегата из статического метода и уберём из типа делегата первый аргумент:
+  We can also bind the first argument of a static method. Supply `firstArgument` when creating the delegate, and omit the corresponding parameter from the delegate type:
 
-```c#
-var staticBarWithFixedArg = (Action) Delegate.CreateDelegate(
-  type:   typeof(Action),
-  method: typeof(FooClass).GetMethod("StaticBar"),
-  firstArgument: new object()); /* <== */
-```
+  ```c#
+  var staticBarWithFixedArg = (Action) Delegate.CreateDelegate(
+    type: typeof(Action),
+    method: typeof(FooClass).GetMethod("StaticBar"),
+    firstArgument: new object()); /* <== */
+  ```
 
-Теперь экземпляр `new object()` “запомнится” внутри экземпляра делегата и будет автоматически подставляться как первый аргумент при каждом вызове. Для того, чтобы создать такой делегат, первый аргумент *обязан* быть ссылочного типа. Фактически мы получили каррирование первого аргумента метода.
+  The delegate retains the `new object()` instance and supplies it as the first argument on every call. For this form of binding, the method's first parameter must be a reference type. This is partial application: one argument is fixed when the delegate is created.
 
-* **Делегат из метода экземпляра типа-значения с открытым первым аргументом**
+* **An open instance delegate for a value type**
 
-Возможность создавать делегаты такого типа я обнаружил совсем недавно, просто размышляя об устройстве методов уровня экземпляра, определённых для структур C#. На самом деле практически во всех методах экземпляров `this` представляет собой обычный `ref`-параметр (или `out`-параметр в конструкторах структур), которому ещё и можно присваивать! Раз `this` - это `ref`-параметр, то логично было попробовать создать тип делегата соответствующей сигнатуры (все типы `Action`- и `Func`-делегатов не предполагают наличие `ref`-/`out`-параметров):
+  I discovered this possibility while thinking about how instance methods on C# structs work. For a struct instance method, `this` behaves like a `ref` parameter; in a struct constructor, it behaves like an `out` parameter. It can even be assigned to. That suggests defining a delegate whose first parameter is a reference to the struct. The standard `Action` and `Func` delegate types do not support `ref` or `out` parameters, so we need our own type:
 
-```c#
-delegate void FooStructBooRef(ref FooStruct foo, int x);
-```
+  ```c#
+  delegate void FooStructBooRef(ref FooStruct foo, int x);
+  ```
 
-И попробовать создать делегат, не указывая параметр `firstArgument`:
+  We can then create the delegate without supplying `firstArgument`:
 
-```c#
-var instanceBooAsStaticWithRef = (FooStructBooRef) Delegate.CreateDelegate(
-  type:   typeof(FooStructBooRef /* <== */),
-  method: typeof(FooStruct).GetMethod("InstanceBoo"));
-```
+  ```c#
+  var instanceBooAsStaticWithRef = (FooStructBooRef) Delegate.CreateDelegate(
+    type: typeof(FooStructBooRef /* <== */),
+    method: typeof(FooStruct).GetMethod("InstanceBoo"));
+  ```
 
-Оказалось, что это работает и можно без проблем подменять структуру при вызове:
+  This works, and lets us pass a different struct variable on each call:
 
-```c#
-var foo1 = new FooStruct();
-var foo2 = new FooStruct();
+  ```c#
+  var foo1 = new FooStruct();
+  var foo2 = new FooStruct();
 
-instanceBooAsStaticWithRef(ref foo1, 1);
-instanceBooAsStaticWithRef(ref foo2, 2);
-```
+  instanceBooAsStaticWithRef(ref foo1, 1);
+  instanceBooAsStaticWithRef(ref foo2, 2);
+  ```
 
-Из нюансов тут следует отметить то, что можно создать и тип делегата с первым `out`-параметром (для рантайма не существует различия между `ref`- и `out`-параметрами кроме атрибута, который фактически использует только компилятор C#), но нельзя создать такие делегаты из виртуальных методов `GetHashCode`, `Equals` и `ToString`, унаследованных от `System.Object`, так как вызов данных методов всегда требуют боксинга типов-значений.
-
-**Бонус**
-
-Хочется описать один workaround, раз пост посвящён делегатам, то пусть будет здесь. Однажды я столкнулся со следующей проблемой:
-
-```c#
-Expression<Func<string>> expr = () => "abc";
-Func<string> func = expr.Compile();
-
-// ArgumentException:
-// The object must be a runtime Reflection object.
-func.BeginInvoke(
-  a => Console.WriteLine(func.EndInvoke(a)),
-  null);
-```
-
-Оказывается среда выполнения не поддерживает методы `BeginInvoke`/`EndInvoke` делегатов, созданных с помощью класса `System.Reflection.Emit.DynamicMethod` (который используют Expression Trees в .NET).
-
-Исправить достаточно легко, надо лишь обернуть `DynamicMethod-`делегат в другой делегат из обычного метода и вызывать у него `BeginInvoke`, но мне не были заранее известны сигнатуры делегатов и это было затруднительно. Я решил проблему очень просто - создал делегат прямо из метода `Invoke` экземпляра другого делегата:
-
-```c#
-Expression<Func<string>> expr = () => "abc";
-Func<string> func = expr.Compile();
-
-func = (Func<string>) Delegate.CreateDelegate(
-  type:   typeof(Func<string>),
-  method: typeof(Func<string>).GetMethod("Invoke"),
-  firstArgument: func);
-
-func.BeginInvoke( // OK now
-  a => Console.WriteLine(func.EndInvoke(a)),
-  null);
-```
-
-Быть может кому-нибудь это пригодится.
+  The first parameter can also be declared as `out`. At the CLR level, both `ref` and `out` are represented as by-reference parameters; the distinction is recorded in metadata and enforced by the C# compiler. However, methods such as `GetHashCode`, `Equals`, and `ToString` that the struct inherits rather than overrides still require boxing, so they cannot be bound in this way.

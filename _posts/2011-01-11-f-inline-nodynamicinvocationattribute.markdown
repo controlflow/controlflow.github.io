@@ -1,13 +1,13 @@
 ---
 layout: post
-title: "F# inline & NoDynamicInvocationAttribute"
+title: "F# inline: [NoDynamicInvocation] attribute"
 date: 2011-01-11 21:01:00
 author: Aleksandr Shvedov
 tags: fsharp inline nodynamicinvocation generics reflection peverify csharp
 ---
-Отвлечёмся ненадолго от монад и поговорим о такой специфичной для F# штуки, как `inline`-определения (`let`-привязки и `member`-декларации в определениях типов). Такие определения позволяют использовать в F# дополнительные ограничения на типы-параметры (*nullness constraints*, *member constraints*), оптимизировать код (засчёт принудительного встраивания кода), это некая надстройка над системой типов .NET, *специфичная только для F#*.
+Let's take a break from monads and look at F# `inline` definitions: both `let` bindings and `member` declarations inside types. They support F#-specific features such as statically resolved type parameters and *member constraints*, and allow the compiler to optimize code by inlining it. These features form a layer on top of the .NET type system.
 
-Интерес представляет то, как F# компилирует данные `inline`-определения в MSIL. В примере кода ниже, содержатся не представляемые нативно в MSIL операции, такие как сложение значений типа `^a` и вызов статического члена с именем `Parse` и сигнатурой `string -> ^a` для произвольного типа `^a`:
+The interesting question is how F# compiles these definitions to MSIL. The following example contains operations that MSIL cannot express directly for an arbitrary type parameter: adding values of type `^a`, and calling a static member named `Parse` with the signature `string -> ^a`:
 
 ```fsharp
 type Foo() =
@@ -22,11 +22,11 @@ type Foo() =
   //     unit -> ^a when ^a: (static member Parse: string -> ^a)
   member inline __.MemberConstraint() =
     printfn "Parsing '123' string..."
-    // вызов через member constraint:
+    // invoke a member through a member constraint
     (^a: (static member Parse: string -> ^a) "123")
 ```
 
-Данный код прекрасно работает, когда типы всех типов-параметров известны на момент компиляции (собственно, типы-параметры вида `^a` в F# и называются *statically resolved type variable*), через методы `InlineAdd` и `NoDynAdd` можно складывать значения любых типов, поддерживающих оператор сложения:
+This works when the type arguments are known at compile time. Type parameters written as `^a` are called *statically resolved type parameters* in F#. The `InlineAdd` and `NoDynAdd` methods can add values of any type that supports addition:
 
 ```fsharp
 let foo = Foo()
@@ -36,7 +36,7 @@ let res3 = foo.NoDynAdd(1, 2)
 let res4 = foo.MemberConstraint<int>()
 ```
 
-Вывод:
+Output:
 
 ```
 Parsing '123' string...
@@ -47,7 +47,7 @@ val res2 : decimal = 3M
 val res3 : int = 3
 val res4 : int = 123
 ```
-А теперь попробуем вызвать все эти методы через механизм рефлексии .NET, получим экземпляры `System.Reflection.MethodInfo` для всех методов:
+Now let's try invoking these methods through .NET reflection. First, obtain a `System.Reflection.MethodInfo` for each method:
 
 ```fsharp
 let [ add; noDyn; memberConstr ] =
@@ -56,7 +56,7 @@ let [ add; noDyn; memberConstr ] =
                                      "MemberConstraint" ]
 ```
 
-Теперь можно вручную задать тип-параметр методу `InlineAdd` и вызвать его через рефлексию со значениями типа `int` и `decimal`:
+We can supply the type argument to `InlineAdd` explicitly and invoke it with `int` and `decimal` values:
 
 ```fsharp
 let res1 = add.MakeGenericMethod(typeof<int>)
@@ -66,12 +66,12 @@ let res2 = add.MakeGenericMethod(typeof<decimal>)
               .Invoke(foo, [| box 1m; box 2m |])
 ```
 
-Вызовы происходят успешно:
+Both calls succeed:
     
     val res1 : obj = 3
     val res2 : obj = 3M
 
-Метод успешно работает даже с пользовательскими типами, определяющими оператор (+) и это замечательно:
+The method also works with a user-defined type that provides an addition operator:
 
 ```fsharp
 type Bar(value: int) =
@@ -83,61 +83,64 @@ let res3 = add.MakeGenericMethod(typeof<Bar>)
               .Invoke(foo, [| box (Bar 1); box (Bar 2) |])
 ```
 
-А теперь попробуем произвести те же самые действия с аналогичным `inline`-методом `NoDynAdd`, отмеченным атрибутом `[<NoDynamicInvocation>]`:
+Now try the same operation with `NoDynAdd`, an otherwise identical `inline` method marked with `[<NoDynamicInvocation>]`:
 
 ```fsharp
 let res4 = noDyn.MakeGenericMethod(typeof<int>)
                 .Invoke(foo, [| box 1; box 2 |])
 ```
 
-Нарываемся на исключение:
+The underlying method throws an exception:
 
     System.NotSupportedException: Specified method is not supported.
        at FSI_0032.Foo.NoDynAdd[a](a x, a y)
 
-Всё дело в том, как F# компилирует данные методы. Метод `InlineAdd` выглядит следующим образом (C#):
+The difference lies in how F# compiles the methods. Here is the generated implementation of `InlineAdd`, decompiled to C#:
 
 ```c#
-public a InlineAdd<a>(a x, a y) {
+public a InlineAdd<a>(a x, a y)
+{
   return LanguagePrimitives.AdditionDynamic<a, a, a>(x, y);
 }
 ```
 
-Где метод `AdditionDynamic` - часть инфраструктуры среды исполнения F#, позволяющая обращаться к операторам `(+)` для различных типов, известных на момент выполнения. Если для типа `^a` оператор `(+)` определён не будет, метод `AdditionDynamic` выбросит исключение с весьма непонятным описанием:
+`AdditionDynamic` is part of the F# runtime infrastructure. It supports addition for types determined at runtime. If the type does not provide a supported addition operation, it throws an exception with a somewhat cryptic message:
 
 > **System.NotSupportedException:**<br/>
 > Dynamic invocation of op_Addition involving coercions is not supported.
 
-Не трудно догадаться, что для `inline`-методов, отмеченных атрибутом `[<NoDynamicInvocation>]`, генерируются лишь заглушки, выбрасывающие исключение типа `NotSupportedException`, а само тело метода хранится лишь в метаданных F#-сборки (в любом случае):
+For an `inline` method marked with `[<NoDynamicInvocation>]`, the compiler emits a stub that throws `NotSupportedException`. As with other inline definitions, the original body is preserved in F#-specific assembly metadata for the compiler to use when inlining:
 
 ```c#
 [NoDynamicInvocation]
-public a NoDynAdd<a>(a x, a y) {
+public a NoDynAdd<a>(a x, a y)
+{
   throw new NotSupportedException();
 }
 ```
 
-А что насчёт *member constraints*? Если для некоторых встроенных операторов, F# имеет поддержку инфраструктуры во время выполнения, то для вызова произвольных методов через member constraint, пришлось бы реализовывать поддержку правил разрешения member constraints во время выполнения. Юзкейс очень редкий, реализовать оптимально сложно, поэтому F# *всегда* компилирует вызовы через member constraints как возбуждение исключения типа `NotSupportedException`:
+Calls through arbitrary *member constraints* are different. F# provides runtime support for certain built-in operators, but invoking an arbitrary member this way would require resolving member constraints at runtime as well. That is an uncommon use case and difficult to implement efficiently. In the emitted method body, such calls therefore become code that throws `NotSupportedException`. We can see this by invoking `MemberConstraint` through reflection:
 
 ```fsharp
 let res5 = memberConstr.MakeGenericMethod(typeof<int>)
                        .Invoke(foo, Array.empty)
 ```
 
-Однако обратите внимание на side-effect перед возбуждением исключения и тот факт, что если бы поток исполнения не дошёл бы до вызова через member constraint, то вызов метода вовсе мог бы окончиться успешно:
+Notice that the side effect occurs before the exception is thrown. If execution never reached the call through the member constraint, the method could complete successfully:
 
     Parsing '123' string...
     System.NotSupportedException: Specified method is not supported.
        at FSI_0032.Foo.MemberConstraint[a]()
 
-То есть реально компилируется следующий код:
+The generated code is equivalent to:
 
 ```c#
-public a MemberConstraint<a>() {
+public a MemberConstraint<a>()
+{
   ExtraTopLevelOperators.PrintFormatLine<Unit>(
       new PrintfFormat<Unit, TextWriter, Unit, Unit, Unit>("Parsing '123' string..."));
   throw new NotSupportedException();
 }
 ```
 
-Мораль сей басни такова, что если разрабатывая F#-библиотеку вы собираете предоставить публичные `inline`-определения, то стоит задуматься о том, что какой-нибудь злой человек может попытаться вызвать их динамически через рефлексию и что-нибудь может сломаться. Спецификация F# так же упоминает, что MSIL-код `inline`-определений может оказаться вовсе [неверифицируемым](http://www.google.com/search?hl=en&source=hp&biw=1574&bih=913&q=PEVerify&aq=f&aqi=g5g-v5&aql=&oq=&gs_rfai=). Используя атрибут `[<NoDynamicInvocation>]` вы можете запретить такие безобразия, вынуждая F# генерировать успешно верифицируемые MSIL-заглушки.
+When exposing public `inline` definitions from an F# library, consider what happens if a caller invokes them through reflection. The F# specification also notes that the emitted MSIL for inline definitions may be [unverifiable](https://learn.microsoft.com/en-us/dotnet/framework/tools/peverify-exe-peverify-tool). Applying `[<NoDynamicInvocation>]` prevents dynamic invocation by replacing the emitted implementation with a verifiable stub that throws an exception.

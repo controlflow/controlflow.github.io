@@ -1,15 +1,15 @@
 ---
 layout: post
-title: "F# computation expressions - part 4: cont + getCC"
+title: "F# computation expressions: part 4, cont & getCC"
 date: 2011-03-15 14:00:00
 author: Aleksandr Shvedov
 tags: fsharp cont computation expressions monads callcc getcc
 ---
-Недавно открыл для себя интересную функцию, предназначенную для работы с монадой continuation - [`getCC`](http://web.archiveorange.com/archive/v/nDNOv9Pf55aKSZYSQ1bg). Эта функция представляет собой `callCC`, как бы возвращающий из себя переданное ему продолжение. То есть становится возможно из любой точки computation expressions получить текущее продолжение и использовать его позже. Фактически это позволяет моделировать `goto` и императивные циклы внутри композиции `cont`-вычислений и замечательно запутывать поток исполнения.
+I recently came across [`getCC`](https://mail.haskell.org/pipermail/haskell-cafe/2005-July/010623.html), an interesting function for working with the continuation monad. It behaves like a version of `callCC` that returns the captured continuation. This lets us obtain the current continuation at a point inside a computation expression and use it later. In effect, we can model `goto` jumps and imperative loops within a composition of `cont` computations.
 
-Я решил дополнить [приведенную ранее]({{ site.baseurl }}2011/01/06/f-computation-expressions-part-3-cont.html) реализацию `cont { }` функциями `getcc` и `getcc’`, при этом выразив их немного проще, чем через `callcc`.
+I have extended the [earlier implementation]({{ site.baseurl }}/2011/01/06/f-computation-expressions-part-3-cont.html) of `cont { }` with `getcc` and `getcc'`, defining them directly rather than in terms of `callcc`.
 
-Сигнатура пространства имён:
+Here is the namespace signature:
 
 ```fsharp
 namespace FSharp.Monads
@@ -38,7 +38,7 @@ module ExtraTopLevelOperators =
   val cont : ContBuilder
 ```
 
-Реализация:
+Implementation:
 
 ```fsharp
 namespace FSharp.Monads
@@ -82,7 +82,7 @@ module ExtraTopLevelOperators =
   let cont = ContBuilder()
 ```
 
-Пример моделирования `goto`-перехода по метке - следующий код будет выполняться пока пользователь будет нажимать клавишу пробела:
+This example models a `goto` jump to a label. It keeps reading keys while the user presses the space bar, and finishes when any other key is pressed:
 
 ```fsharp
 open FSharp.Monads
@@ -103,7 +103,7 @@ let goto() =
   |> Cont.run ignore
 ```
 
-Без “сахара” эта функция выглядит следующим образом (обратите внимание, что пришлось определить члены построителя computation expression, такие как `Combine` и `Delay`):
+Without the computation expression syntax, the function looks like this. This example requires two additional builder methods, `Combine` and `Delay`:
 
 ```fsharp
 let goto'() =
@@ -126,7 +126,7 @@ let goto'() =
   |> Cont.run ignore
 ```
 
-С помощью другой функции - `getcc’` - возможно дополнительно передавать некоторое значение при возврате к продолжению, что позволяет моделировать императивные циклы:
+The other function, `getcc'`, also lets us supply a value when resuming the captured continuation. We can use it to model an imperative loop:
 
 ```fsharp
 let loop() =
@@ -140,7 +140,7 @@ let loop() =
   |> Cont.run id
 ```
 
-Без синтаксиса computation expressions:
+Without the computation expression syntax:
 
 ```fsharp
 let loop'() =
@@ -155,4 +155,4 @@ let loop'() =
   |> Cont.run id
 ```
 
-То есть `getcc’` возвращает кортеж из значения некоторого типа и функции с аргументом данного типа, возвращающую продолжение. Какой аргументы вы передадите функции, такое значение и вернет `getcc’` первым элементом кортежа, а изначальное значение берётся из аргумента вызова `getcc’`.
+The result of `getcc'` is a tuple containing a value and a function that accepts a value of the same type and returns a continuation computation. Resuming that computation makes the supplied argument appear as the first element of the tuple returned by `getcc'`. On the first pass, that element is the initial argument passed to `getcc'`.

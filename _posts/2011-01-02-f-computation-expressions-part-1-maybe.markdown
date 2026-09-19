@@ -1,15 +1,15 @@
 ---
 layout: post
-title: "F# computation expressions - part 1: maybe { ... }"
+title: "F# computation expressions: part 1, maybe"
 date: 2011-01-02 14:17:00
 author: Aleksandr Shvedov
 tags: fsharp computation expressions monads maybe option
 ---
-Ну как можно не посветить монадам первый пост в новом году?
+The first post of the year is devoted to monads.
 
-В этой серии постов я хочу просто собрать в кучу определения на F# таких эпических монад, как `maybe`, `state`, `continuation` и, возможно, некоторых других. Сомневаюсь, что кому-то они реально понадобятся в повседневной разработке на F# (когда есть изменяемые `let`-привязки вместо монады `state` и встроенные в язык `seq { … }`, `[ … ]` и `[| … |]`, а так же `async { … }` из состава стандартной библиотеки), поэтому серия носит чисто академический характер (например, если вам хочется в самых известных монадах, но при этом не хочется курить детали *type classes* или разбирать синтаксис Haskell). Я не буду приводить реализации всех возможных методов классов-builder’ов *computation expression* (перечисление которых и правила трансформации можно найти [здесь](http://msdn.microsoft.com/en-us/library/dd233182.aspx)), а лишь тот набор, который позволят понять суть монады и пример её использования.
+This series collects F# implementations of familiar monads such as `maybe`, `state`, and `continuation`, and perhaps a few others. The examples are primarily educational: F# already provides mutable `let` bindings for state, built-in `seq { … }`, `[ … ]`, and `[| … |]` expressions, and `async { … }` in the standard library. These implementations offer a way to explore common monads without first learning Haskell syntax or the details of *type classes*. I will implement only the computation expression builder methods needed to explain each monad and demonstrate its use. The complete list of builder methods and translation rules is available in the [language reference](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/computation-expressions).
 
-Начнём с монады `maybe`, а в качестве типа вычисления `M<’a>` будем использовать тип `Option<’a>` из стандартной библиотеки F#. Сигнатура:
+We will start with the `maybe` monad, using F#'s standard `Option<'a>` type as the computation type `M<'a>`. Here is the signature:
 
 ```fsharp
 namespace FSharp.Monads
@@ -22,7 +22,7 @@ type MaybeBuilder =
   member ReturnFrom: 'a option -> 'a option
 ```
 
-Реализация:
+Implementation:
 
 ```fsharp
 namespace FSharp.Monads
@@ -36,7 +36,7 @@ type MaybeBuilder() =
   member b.ReturnFrom x = x : _ option
 ```
 
-В качестве пример использования, можно привести программу, которая ожидает ввод пользователем целого числа и пытается найти порядковый номер введённого числа в последовательности простых чисел, при этом в случае не числового ввода или ввода числа, не являющегося простым, программа останавливается и возвращает `None`:
+As an example, this program reads an integer and tries to find its position in the list of prime numbers from 2 to 100. If the input is not an integer or is not in that list, the computation stops and returns `None`:
 
 ```fsharp
 open System
@@ -44,14 +44,14 @@ open FSharp.Monads
 
 let maybe = MaybeBuilder()
 
-/// Список простых чисел от 2 до 100
+/// The list of prime numbers from 2 to 100
 let primes =
-  let is_prime x = // неэффективно, лишь для примера
+  let is_prime x = // inefficient, but sufficient for this example
     Seq.forall (fun y -> x % y > 0) { 2 .. x/2 }
   { 2 .. 100 } |> Seq.filter is_prime
                |> Seq.toList
 
-/// Попытка считывания с консоли целого числа
+/// Attempts to read an integer from the console
 let inputInt32() =
   maybe {
    let str = Console.ReadLine()
@@ -59,10 +59,10 @@ let inputInt32() =
    if success then return value
   }
 
-/// Попытка считывания с консоли простого числа
+/// Attempts to read a prime number from the console
 let tryInputPrime() =
   maybe {
-    printfn "введите простое число от 2 до 100:"
+    printfn "enter a prime number from 2 to 100:"
     let! prime = inputInt32()
     let! index = List.tryFindIndex ((=) prime) primes
     return prime, index + 1
@@ -70,14 +70,14 @@ let tryInputPrime() =
 
 match tryInputPrime() with
 | Some(prime, index) ->
-          printfn "ввели простое число %d (№%d)" prime index
-| None -> printfn "ввод простого числа завершился неудачей"
+          printfn "entered prime number %d (#%d)" prime index
+| None -> printfn "failed to read a prime number"
 ```
 
-Вот как выглядит функция `inputInt32` “без сахара”, обратите внимание на вызов метода `Zero()`:
+Here is `inputInt32` with the computation expression syntax removed. Note the call to `Zero()`:
 
 ```fsharp
-/// Попытка считывания с консоли целого числа
+/// Attempts to read an integer from the console
 let inputInt32'() =
   let str = Console.ReadLine()
   let success, value = Int32.TryParse str
@@ -86,12 +86,12 @@ let inputInt32'() =
     else maybe.Zero()
 ```
 
-А вот и вся “поднаготная” функции `tryInputPrime`:
+And here is the corresponding translation of `tryInputPrime`:
 
 ```fsharp
-/// Попытка считывания с консоли простого числа
+/// Attempts to read a prime number from the console
 let tryInputPrime'() =
-  printfn "введите простое число от 2 до 100:"
+  printfn "enter a prime number from 2 to 100:"
   maybe.Bind(
     inputInt32(),
     fun prime ->
@@ -101,4 +101,4 @@ let tryInputPrime'() =
           maybe.Return(prime, index + 1)))
 ```
 
-Обратите так же внимание на модуль `Option` из состава стандартной библиотеки F#, он содержит дополнительные функции для работы со значениями типа `'a option`, такие как `map` и `fold` и другие.
+The standard library's `Option` module also provides functions for working with `'a option` values, including `map` and `fold`.
