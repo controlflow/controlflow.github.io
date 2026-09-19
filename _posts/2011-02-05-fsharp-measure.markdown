@@ -1,11 +1,11 @@
 ---
 layout: post
-title: "Измерение времени исполнения кода в F#"
+title: "Measuring execution time in F#"
 date: 2011-02-05 17:29:00
 author: Aleksandr Shvedov
 tags: fsharp measure stopwatch printf sprintf threadpriority gc
 ---
-Наверняка многие из вас, дорогие читатели, писали на многих языках программирования строчки, подобные этим:
+You have probably written code like this in more than one programming language:
 
 ```fsharp
 let timer = System.Diagnostics.Stopwatch.StartNew()
@@ -17,70 +17,70 @@ timer.Stop()
 printfn "elapsed=%O" timer.Elapsed
 ```
 
-Писать такую портянку для того, чтобы прикинуть производительность того или иного кусочка кода, обычно лень. Более того, данный код имеет недостатки и возможно улучшить актуальность возвращаемых им результатов. Основные направления для улучшений:
+Writing this boilerplate every time you want a rough performance estimate soon gets tedious. It also leaves room for more reliable measurements. Here are the main improvements I would like:
 
-* Необходимо контроллировать, чтобы код тестировался *без подключенного отладчика* (вдруг вы забудете об этом?).
-* Необходимо удостовериться, что код сборки был собран с атрибутом, разрешающим *оптимизации JIT-компилятора* (*RELEASE*-сборка со включенными оптимизациями).
-* Перед тестированием следует задавать *высокий приоритет* тестирующему потоку.
-* До тестирования следует вызывать *сборку мусора* чтобы тестовые фрагменты кода были изначально в более одинаковых условиях.
-* Обычно лениво подбирать вручную *количество итераций*, необходимое для получения актуальных результатов (необходимо добиться достаточно длительного выполнения тестов).
-* Можно *корректировать* результаты тестов если внести дополнительный *пустой тест*, тем самым измерив время, которое тратится на тестирующую инфраструктуру.
-* Иногда имеет смысл сделать *"прогревочную" итерацию*, для того чтобы тестируемый код произвёл какие-либо первоначальные инициализации.
-* Было бы удобно последовательно запускать тесты несколько раз и вычислять *средний*, *минимальный* и *максимальный* результаты.
-* Удобно иметь хоть какое-то *табличное представление* результатов.
-* Удобно видеть *прогресс* тестирования и иметь возможность *отменить* тестирование в любой момент.
+* Check that the benchmark runs *without a debugger attached*, in case I forget.
+* Verify that the assembly allows *JIT optimizations*: a *Release* build with optimizations enabled.
+* Give the benchmarking thread a *high priority* before running the tests.
+* Run a *garbage collection* before each test so that the code samples start under more comparable conditions.
+* Choose the *iteration count* automatically so that tests run long enough to produce useful measurements.
+* Optionally *correct* the results using an *empty test* to estimate the time spent in the benchmarking infrastructure.
+* Support a *warmup run* so that the code can perform any initial setup before it is measured.
+* Repeat the tests and calculate *average*, *minimum*, and *maximum* results.
+* Display the results in a *table*.
+* Show *progress* and allow the user to *cancel* the benchmark.
 
-Так как я добрый и позаботился о вас, то вот сигнатура:
+Here is the signature of a module that does all of this:
 
 ```fsharp
 module Measure
 
-/// Настройки измерения производительности
+/// Performance measurement settings
 [<NoEquality; NoComparison>]
 type TestOptions =
-  { /// Запуск сборщика мусора до и после каждого теста.
+  { /// Run the garbage collector before and after each test.
     perRunGC: bool
-    /// Сбор статистики о количестве сборок мусора.
+    /// Collect garbage collection counts.
     collectGCStat: bool
-    /// Повышение приоритета текущему потоку.
+    /// Raise the priority of the current thread.
     highPriority: bool
-    /// Проверка настроек среды, таких как задействованные
-    /// JIT-оптимизации и запуск без отладчика.
+    /// Check the environment for enabled JIT optimizations
+    /// and ensure that no debugger is attached.
     checkTestEnv: bool
-    /// Отображение полосы прогресса тестирования
+    /// Display a progress bar
     showProgress: bool
-    /// Корректировка результатов с учётом влияния
-    /// тестирующей инфраструктуры
+    /// Correct the results for the overhead
+    /// of the benchmarking infrastructure
     impactCorrect: bool
-    /// Прогревочный запуск
+    /// Perform a warmup run
     warmIteration: bool
-    /// Очистка консоли перед выводом
-    /// очередной таблицы результатов.
+    /// Clear the console before displaying
+    /// the next results table.
     clearConsole: bool
-    /// Показывать средние результаты.
+    /// Show average results.
     showAverage: bool
-    /// Показывать минимальные результаты.
+    /// Show minimum results.
     showMinimum: bool
-    /// Показывать максимальные результаты.
+    /// Show maximum results.
     showMaximum: bool
-    /// Количество итераций тестирования. Если указать значение
-    /// 0, то количество итераций будет подобрано автоматически.
+    /// Number of iterations. Set to 0 to choose
+    /// the iteration count automatically.
     iterationsCount: int
-    /// Среднее время тестирование. Имеет смысл только при
-    /// указании в качестве количества итераций значения 0.
+    /// Target benchmark duration. Only used when
+    /// the iteration count is set to 0.
     testTime: System.TimeSpan }
 
-/// Настройки измерений по-умолчанию
+/// Default measurement settings
 val defaults: TestOptions
 
-/// Измерение производительности кода
+/// Measure code performance
 val run: (string * (unit -> unit)) list -> unit
 
-/// Измерение производительности кода с заданными настройками
+/// Measure code performance with the specified settings
 val runWithOptions: (string * (unit -> unit)) list -> TestOptions -> unit
 ```
 
-А вот и реализация модуля, который делает всё то, что я описал выше (усыпанная комментариями и различными вкусностями языка F#):
+And here is the implementation, with comments explaining the details and a few examples of F# language features along the way:
 
 ```fsharp
 module Measure
@@ -89,7 +89,7 @@ open System
 open System.Threading
 open System.Diagnostics
 
-/// Настройки измерения производительности
+/// Performance measurement settings
 [<NoEquality; NoComparison>]
 type TestOptions =
   { perRunGC:      bool ; collectGCStat: bool
@@ -100,7 +100,7 @@ type TestOptions =
     showMaximum:   bool ; iterationsCount: int
     testTime:      TimeSpan }
 
-/// Настройки измерений по-умолчанию
+/// Default measurement settings
 let defaults =
   { perRunGC      = true ; collectGCStat = true
     highPriority  = true ; checkTestEnv  = true
@@ -110,29 +110,29 @@ let defaults =
     showMaximum  = false ; iterationsCount = 0
     testTime = TimeSpan.FromSeconds 3. }
 
-/// Проверка среды тестирования
+/// Check the benchmark environment
 let checkEnvironment() =
   let fail reason =
-    let message = "Ошибка проверки среды: " + reason
+    let message = "Environment check failed: " + reason
     in raise (InvalidOperationException message)
 
-  // проверяем, подключен ли отладчик
+  // check whether a debugger is attached
   if Debugger.IsAttached then
-    fail <| "тестирование следует производить "
-          + "без подключенного отладчика."
+    fail <| "Benchmarks must be run "
+          + "without a debugger attached."
 
-  // проверяем, собрана ли сборка с оптимизациями
+  // check whether the assembly allows optimizations
   let asm = Reflection.Assembly.GetExecutingAssembly()
   for attribute in asm.GetCustomAttributes false do
     match attribute with
     | :? DebuggableAttribute as d ->
       if d.IsJITOptimizerDisabled then
-         fail "JIT-оптимизации не задействованы."
+         fail "JIT optimizations are disabled."
       if d.IsJITTrackingEnabled then
-         fail "задействована JIT-трассировка."
+         fail "JIT tracking is enabled."
     | _ -> ()
 
-/// Результаты итерации тестирования
+/// Results of a benchmark run
 [<ReferenceEquality; NoComparison>]
 type TestResult = { time: TimeSpan; gcStat: int[] }
 
@@ -144,12 +144,12 @@ type Console with
 type con = Console
 type color = ConsoleColor
 
-/// Возвращает функцию-принтер
+/// Return a function that prints results
 let precomputePrinter (names: string list) =
-  // подсветка строк цветом
+  // highlight results with color
   let highl cond = if cond then color.Yellow
                            else color.DarkYellow
-  // вычисляем один раз формат вывода имён и культуру
+  // compute the name format and culture once
   let longestFrom = Seq.map String.length >> Seq.max
   let format = sprintf "{0,-%d}" (longestFrom names + 3)
   let culture = Globalization.CultureInfo.InvariantCulture
@@ -157,47 +157,47 @@ let precomputePrinter (names: string list) =
   fun (name: string) (count: int) (results: TestResult list) ->
     let initColor = con.ForegroundColor
 
-    // заголовок таблицы результатов
+    // results table header
     con.ForegroundColor <- color.DarkGray
     con.Write("{0} results ({1} iterations):\n", name, count)
 
-    // наилучший результат по времени
+    // fastest elapsed time
     let bestTime = results |> Seq.minBy (fun x -> x.time)
-    let bestGC = results // min кол-во сборок мусора
+    let bestGC = results // minimum number of collections
               |> Seq.map (fun x -> Array.sum x.gcStat)
               |> Seq.min
 
-    // сравнение времени относительно наименьшего
+    // compare each time with the fastest result
     let bestTicks = float bestTime.time.Ticks
     let factors = List.map (fun result ->
         (float result.time.Ticks / bestTicks)
                      .ToString("F1", culture)) results
     let factorFmt = sprintf "{0,%d}x" (longestFrom factors)
 
-    // печатаем табличку результатов
+    // print the results table
     for name, result, factor
       in Seq.zip3 names results factors do
 
       con.Write(color.DarkGray, "\n> ")
       con.ForegroundColor <- color.Gray
-      con.Write(format, name) // имя теста
+      con.Write(format, name) // test name
 
-      // результат (выделяем минимальный)
+      // elapsed time, highlighting the minimum
       con.Write(color.DarkGray, " - ")
       con.ForegroundColor <- highl (result = bestTime)
       con.Write result.time
 
-      // результат относительно наименьшего
+      // time relative to the fastest result
       con.Write(color.DarkGray, " - ")
       con.ForegroundColor <- highl (result = bestTime)
       con.Write(factorFmt, factor)
 
-      // статистика сборок мусора
+      // garbage collection statistics
       if result.gcStat <> Array.empty then
         con.Write(color.DarkGray, " - ")
         con.ForegroundColor <- highl (Array.sum result.gcStat = bestGC)
 
-        result.gcStat // не делайте так! :)
+        result.gcStat // print collection counts separated by slashes
         |> Array.fold (fun tail count ->
           if tail then con.Write '/'
           con.Write count; true) false |> ignore
@@ -206,17 +206,17 @@ let precomputePrinter (names: string list) =
     con.WriteLine()
     con.WriteLine()
 
-// заранее вычисляем строки чтобы минимизировать
-// воздействие прогресс-бара на сборщик мусора
+// precompute strings to minimize the progress
+// display's impact on garbage collection
 let blankLine = String(' ', con.BufferWidth - 1)
 let progressLine = Array.init 100 (fun n -> String('.', n))
 
-/// Очистка текущей строки
+/// Clear the current line
 let clearLine() = con.CursorLeft <- 0
                   con.Write blankLine
                   con.CursorLeft <- 0
 
-/// Показ прогресс-бара тестирования
+/// Display benchmark progress
 let printProgress testid count =
   let initColor = con.ForegroundColor
   con.CursorVisible <- false
@@ -235,18 +235,18 @@ let printProgress testid count =
   con.CursorVisible <- true
   con.ForegroundColor <- initColor
 
-/// Показ сообщения о прерывании тестирования
+/// Display a cancellation message
 let printCancelled() =
   let initColor = con.ForegroundColor
   con.ForegroundColor <- color.DarkRed
   con.WriteLine("test run stopped")
   con.ForegroundColor <- initColor
 
-/// Запуск сборки мусора
+/// Run a garbage collection
 let inline collectGC() = GC.Collect()
                          GC.WaitForPendingFinalizers()
 
-/// Проверка нажатия клавиши Escape
+/// Check whether Escape was pressed
 let rec checkEscape () =
   if con.KeyAvailable
     then match con.ReadKey true with
@@ -254,84 +254,84 @@ let rec checkEscape () =
          | _ -> checkEscape()
     else false
 
-/// Вычисление средних результатов тестирования
+/// Calculate average benchmark results
 let calcAvarage prevResults count =
   [ for results in prevResults ->
-    { time = // вычисляем среднее время теста
-        let sum = // складываем продолжительности
+    { time = // calculate the average elapsed time
+        let sum = // sum elapsed times
           results |> Seq.map (fun x -> x.time)
                   |> Seq.reduce (+)
-        in TimeSpan.FromTicks( // делим на кол-во
+        in TimeSpan.FromTicks( // divide by the number of runs
              sum.Ticks / int64 count)
-      gcStat = // среднее кол-во сборок мусора
-        // проверяем, собираем ли статистику GC
+      gcStat = // average garbage collection counts
+        // check whether GC statistics are available
         match List.head results with
         | { gcStat = null } -> null
-        | _ -> results // суммируем кол-во сборок
+        | _ -> results // sum collection counts
             |> Seq.map (fun x -> x.gcStat)
             |> Seq.reduce (Array.map2 (+))
             |> Array.map (fun x -> x / count) } ]
 
-/// Вычисление максимальный или минимальных результатов
+/// Calculate maximum or minimum results
 let calcExtr prevResults max =
   [ for results in prevResults ->
     { time = results |> Seq.map (fun x -> x.time)
                      |> if max then Seq.max else Seq.min
-      gcStat = // макс или мин кол-во сборок мусора
-        // проверяем, собираем ли статистику GC
+      gcStat = // maximum or minimum collection counts
+        // check whether GC statistics are available
         match List.head results with
         | { gcStat = null } -> null
-        | _ -> results // ищем по сумме кол-ва сборок
+        | _ -> results // compare total collection counts
             |> Seq.map (fun x -> x.gcStat)
             |> if max then Seq.maxBy Array.sum
                       else Seq.minBy Array.sum } ]
 
-/// Измерение производительности
-/// кода с заданными настройками
+/// Measure code performance
+/// with the specified settings
 let runWithOptions (tests: (string * (unit -> unit)) list)
                    (options: TestOptions) =
 
   if List.isEmpty tests then
      raise (ArgumentException "tests is empty.")
 
-  // проверяем среду тестирования
+  // check the benchmark environment
   if options.checkTestEnv then checkEnvironment()
 
-  // сохраняем приоритет текущего потока
+  // save the current thread priority
   let thread = Thread.CurrentThread
   let initPriority = thread.Priority
 
-  let printResults = // функция печати результатов
+  let printResults = // result-printing function
     precomputePrinter (List.map fst tests)
   let stopwatch = Stopwatch()
-  let gcStat = // выделяем память под статистику GC
+  let gcStat = // allocate storage for GC statistics
     if options.collectGCStat
       then Array.zeroCreate (GC.MaxGeneration + 1)
       else Array.empty
 
-  // проведение одной итерации тестов
+  // run one round of tests
   let rec runTests id count tests results =
     match tests with
-    | [] -> List.rev results  // по окончанию тестов
+    | [] -> List.rev results  // all tests have completed
     | _ when checkEscape() -> printCancelled(); []
     | (_, test) :: left ->
-      // вычисляем шаг строки прогресса
+      // calculate the progress step
       let step = match count / 20 with 0 -> 1 | x -> x
-      // запускаем прогревочную итерацию и GC
+      // warm up the test and collect garbage
       if options.warmIteration then test() |> ignore
       if options.perRunGC then collectGC()
       stopwatch.Reset()
 
-      // собираем информацию о сборках мусора
+      // record garbage collection counts
       if options.collectGCStat then
         for gen = 0 to gcStat.Length - 1 do
           gcStat.[gen] <- GC.CollectionCount gen
 
-      // выставляем приоритет потоку
+      // set the thread priority
       if options.highPriority then
         thread.Priority <- ThreadPriority.Highest
 
-      stopwatch.Start() // само тестирование
+      stopwatch.Start() // measure the test
       if options.showProgress
         then for i = 0 to count do
                  if i % step = 0 then
@@ -341,163 +341,163 @@ let runWithOptions (tests: (string * (unit -> unit)) list)
                  test() |> ignore
       stopwatch.Stop()
 
-      let gcStat = // собираем инф-цию о сборках мусора
+      let gcStat = // calculate garbage collection counts
         if options.collectGCStat then
           Array.mapi (fun gen count ->
             GC.CollectionCount gen - count) gcStat
         else Array.empty
 
-      // подчищаем память после теста
+      // collect garbage after the test
       if options.perRunGC then collectGC()
       clearLine()
 
-      { gcStat = gcStat // собираем результаты
+      { gcStat = gcStat // record the result
         time = stopwatch.Elapsed } :: results
-      |> runTests (id + 1) count left // и продолжаем
+      |> runTests (id + 1) count left // continue with the remaining tests
 
-    // запуск тестов с корректировкой результатов
+    // run tests with overhead correction
     let runWithCorrect count =
-      // добавляем в начало списка пустой тест
+      // prepend an empty test
       let tests = ("fake", fun() -> ()) :: tests
       match runTests 0 count tests [] with
-      | [] -> [] // если тесты отменили
+      | [] -> [] // the benchmark was cancelled
       | _ :: real as all ->
-        // вычислем время самого быстрого теста
+        // find the fastest test
         let min = List.minBy (fun x -> x.time) all
         let delta = min.time - TimeSpan.FromTicks 1L
         con.WriteLine("delta = {0}", delta)
 
-        // вычитаем это время из всех тестов
+        // subtract this time from every result
         let fix r = { r with time = r.time - delta }
         in List.map fix real
 
-    // автоматическое вычисление количества итераций
+    // choose the iteration count automatically
     let rec calculateCount top count =
       match runTests 1 count tests [] with
-      | []  ->  -1 // вызвана отмена тестирования
-      | results -> // вычисляем суммарную длительность тестов
+      | []  ->  -1 // the benchmark was cancelled
+      | results -> // calculate the total elapsed time
         let summary = results |> List.map (fun x -> x.time)
                               |> List.reduce (+)
-        // процент достижения необходимой длительности
+        // fraction of the target duration reached
         let perc = float summary.Ticks
                  / float options.testTime.Ticks
 
-        con.CursorTop <- top // переходим на первую строку
-        con.Write( // строка всегда гарантированно длиннее
+        con.CursorTop <- top // return to the first line
+        con.Write( // the new line is always longer
           "autotesting: {0:F2}% (iterations: {1})\n",
           perc * 100., count)
 
         if perc > 0.9 then
           con.CursorTop <- top; clearLine()
-          con.WriteLine( // выводим конечное кол-во итераций
+          con.WriteLine( // print the final iteration count
             "autotesting completed (iterations: {0})", count)
           count
-        else // вычисляем прирост количества итераций
+        else // increase the iteration count
           let delta = int (float count * (1.0 - perc) * 2.)
           if delta = 0 then count * 2 else count + delta
-          |> calculateCount top // повторно тестируем
+          |> calculateCount top // run the tests again
 
-    // повторные запуски тестов и усреднение результатов
+    // repeat the tests and average the results
     let rec runMany count prev =
-      let results = // запускаем тесты с коррекцией или без
+      let results = // run with or without overhead correction
         if checkEscape() then printCancelled(); []
         elif options.impactCorrect
           then runWithCorrect count
           else runTests 1 count tests []
       match results, prev with
-      | [], _ -> () // если тестирование остановили
-      | results, [] -> // отображение результатов
+      | [], _ -> () // the benchmark was cancelled
+      | results, [] -> // display the results
         if options.clearConsole then con.Clear()
         printResults "Initial" count results
         runMany count [ for x in results -> [x] ]
       | results, (first :: _ as prev) ->
         if options.clearConsole then con.Clear()
-        // соединяем результаты со списками предыдущих
+        // add the results to the previous runs
         let prev = List.map2 (fun h t -> h::t) results prev
-        // отображаем результаты теста
+        // display the current results
         printResults "Test" count results
 
-        if options.showAverage then // средний результат
-          // количество произведённых измерений
+        if options.showAverage then // average results
+          // number of measurements taken
           let measureCount = List.length first + 1
           calcAvarage prev measureCount
           |> printResults "Average" count
 
-        if options.showMinimum then // наименьший результат
+        if options.showMinimum then // minimum results
           printResults "Minimum" count (calcExtr prev false)
-        if options.showMaximum then // наибольший результат
-          printResults "Minimum" count (calcExtr prev true)
+        if options.showMaximum then // maximum results
+          printResults "Maximum" count (calcExtr prev true)
 
-        runMany count prev // продолжаем тестировать
+        runMany count prev // continue benchmarking
 
-    let count = // вычисляем количество итераций
+    let count = // determine the iteration count
       if options.iterationsCount > 0
         then options.iterationsCount
         else calculateCount con.CursorTop 1
 
     if count > 0 then
-      runMany count [] // запускаем тестирование
+      runMany count [] // start the benchmark
 
-      // возвращаем потоку изначальный приоритет
+      // restore the original thread priority
       if options.highPriority then
         thread.Priority <- initPriority
 
-/// Измерение производительности кода
+/// Measure code performance
 let run tests = runWithOptions tests defaults
 ```
 
-Пример вывода результатов:
+Example output:
 
 ![]({{ site.baseurl }}/images/fsharp-measure.png)
 
-Замечания к реализации:
+A few notes on the implementation:
 
-* Модуль содержит всего две функции: `run` и `runWithOptions`. Первая из них пользуется настройками по умолчанию, вторая позволяет задать необходимые настройки в виде значения типа `TestOptions`. Обе функции получают тестируемые фрагменты кода в виде списка кортежей из строкового имени теста и функции типа `(unit -> unit)`.
-* При задании настроек совсем не обязательно создавать экземпляр `TestOptions` инициализируя все поля record’а. Можно воспользоваться копирующим `with`-выражением F# и значением `defaults`, определённым в модуле для того, чтобы изменить настройки частично, например: `{ Measure.defaults with checkTestEnv = false }`.
-* Отмена тестирования - клавиша `Escape`, работает с интервалом в один тест и предпочитает показать результаты, если это возможно.
-* Показ прогресса написан так, чтобы не выделять память на куче, однако инфраструктура `System.Console` внутри всё равно производит некоторые выделения памяти, поэтому от некоторого влияния можно избавиться только отключив показ прогресса.
-* Данная реализация отображает отношение каждого из тестов по времени к самому быстрому (затратившего минимальное время).
-* Не вздумайте запускать в F# Interactive, только обычным exe-приложением вне VisualStudio.
+* The module exposes two functions: `run` and `runWithOptions`. The former uses the default settings; the latter accepts a `TestOptions` value. Both take a list of tuples containing a test name and a function of type `unit -> unit`.
+* You do not need to initialize every field of `TestOptions` to customize the settings. Use F# record copy-and-update syntax with the module's `defaults` value to change only the fields you need: `{ Measure.defaults with checkTestEnv = false }`.
+* Press `Escape` to cancel. The key is checked between tests, and the module displays the available results where possible.
+* The progress display is written to avoid heap allocations, but `System.Console` still allocates internally. To eliminate that source of interference, disable progress reporting.
+* The output includes the ratio of each test's elapsed time to that of the fastest test.
+* Run this as a standalone executable outside Visual Studio, rather than in F# Interactive.
 
-Выводит результаты он достаточно симпатично, например, протестируем скорость работы функции `Printf.sprintf` из состава стандартной бибилиотеки F# по сравнению с конкатенацией строк и методом `System.String.Format`:
+For a practical example, let's compare `Printf.sprintf` from the F# standard library with string concatenation and `System.String.Format`:
 
 ```fsharp
-// пропущенные через `id` значения
-// не заинлайнятся далее по коду
+// values passed through id will not
+// be inlined into the code below
 let name = id "Alex"
 let age  = id 22
 
-// Тестируем сбор строки вида:
+// benchmark building a string of this form:
 //  "My name is Alex (22 years old)"
 
 Measure.runWithOptions [
-  // через сложение строк
+  // using string concatenation
   "System.String.Concat", fun()->
     "My name is " + name + " (" + string age + " years old)"
     |> ignore
 
-  // через метод string.Format
+  // using string.Format
   "System.String.Format", fun() ->
     System.String.Format("My name is {0} ({1} years old)", name, age)
     |> ignore
 
-  // через метод Printf.sprintf
+  // using Printf.sprintf
   "Printf.sprintf", fun() ->
     Printf.sprintf "My name is %s (%d years old)" name age
     |> ignore
 
-    // и дополнительно отображаем мин/макс время
+    // also show minimum and maximum times
   ] { Measure.defaults with showMinimum = true
                             showMaximum = true }
 ```
 
-Получаем следующий результат (на машине старенький Athlon 64 X2 @2.4GHz):
+Here are the results on my Athlon 64 X2 at 2.4 GHz:
 
 ![]({{ site.baseurl }}/images/fsharp-measure2.png)
 
-Ужасно, правда? В чём же причина тормознутости функции `sprintf`?
+Why is `sprintf` so much slower here?
 
-Оказывается, что большинство пользователей F# используют данную и другие функции из модуля `Printf` не совсем корректно. Всё семейство `printf`-функций из данного модуля на самом деле осуществляют разбор строки формата и динамически формируют функцию (часто с аргументами в каррированной форме, как в примере выше: `string -> int -> unit`). Функция возвращается пользователю и последующее применение всех аргументов вызывают печать в консоль/строку/`TextWriter`, смотря какой из функций модуля `Printf` вы пользуетесь. Существенное время тратится на формирование данной функции и этого можно избежать, если заранее вычислить эту функцию и сохранить в какой-нибудь `let`-привязке. Перепишем тест следующим образом и проверим результатом:
+There is a cost in the `Printf` family that is easy to overlook. These functions parse the format string and dynamically construct a formatting function, often with curried arguments. In the `sprintf` example above, its type is `string -> int -> string`. Applying the remaining arguments produces output in the console, a string, or a `TextWriter`, depending on which `Printf` function you use. Constructing the formatting function takes a significant amount of time. We can avoid repeating that work by computing it once and storing it in a `let` binding. Let's modify the benchmark:
 
 ```fsharp
 let name = id "Alex"
@@ -506,12 +506,12 @@ let age  = id 22
 let k = Printf.sprintf "My name is %s (%d years old)"
 
 Measure.runWithOptions [
-  // через метод Printf.sprintf
+  // using Printf.sprintf
   "Printf.sprintf", fun() ->
     Printf.sprintf "My name is %s (%d years old)" name age
     |> ignore
 
-  // через заранее сформированную функцию
+  // using a precomputed formatting function
   "k = Printf.sprintf", fun() ->
     k name age |> ignore
 
@@ -519,8 +519,8 @@ Measure.runWithOptions [
                             showMaximum = true }
 ```
 
-В итоге обнаруживаем, что время сокращается вдвое, а нагрузка на GC примерно на треть:
+The elapsed time is now roughly halved, and the garbage collection counts drop by about a third:
 
 ![]({{ site.baseurl }}/images/fsharp-measure3.png)
 
-Однако даже при этом функция `sprintf` оказывается более, чем *на порядок* медленне метода `String.Format` и просто нещадно мусорит на куче, что должно заставить задуматься о целесообразности применения (или хотя бы о более оптимальном применении засчёт предварительного формирования функции печати) модуля `Printf` в узких местах приложения. И это далеко не единственное место, где F# просто ужасно тормозит ;)
+Even with this change, `sprintf` is more than *an order of magnitude* slower than `String.Format` in this benchmark and generates substantially more garbage. In performance-sensitive code, it is worth considering an alternative to `Printf`, or at least constructing the formatting function once and reusing it.
