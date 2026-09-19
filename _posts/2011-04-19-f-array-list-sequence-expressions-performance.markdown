@@ -5,18 +5,18 @@ date: 2011-04-19 20:00:00
 author: Aleksandr Shvedov
 tags: fsharp fprog computation expressions builders lists arrays list comprehensions seq
 ---
-Изучая разделы 6.3.13 и 6.3.14 [спецификации F#](http://research.microsoft.com/en-us/um/cambridge/projects/fsharp/manual/spec.html), я обнаружил следующие утверждения относительно вычисления выражений созданий списков `[ ]` и массивов `[| |]` (так называемые *list comprehensions*):
+While reading sections [6.3.13](https://fsharp.github.io/fslang-spec/expressions/#6313-lists-via-sequence-expressions) and [6.3.14](https://fsharp.github.io/fslang-spec/expressions/#6314-arrays-sequence-expressions) of the [F# specification](https://fsharp.github.io/fslang-spec/), I came across these statements about list `[ ]` and array `[| |]` expressions, also known as *list and array comprehensions*:
 
-* In all cases `[ cexpr ]` elaborates to `Microsoft.FSharp.Collections.Seq.toList(seq { cexpr })`.
-* In all cases `[| cexpr |]` elaborates to `Microsoft.FSharp.Collections.Seq.toArray(seq { cexpr })`.
+* In all cases `[ cexpr ]` elaborates to `FSharp.Collections.Seq.toList(seq { cexpr })`.
+* In all cases `[| cexpr |]` elaborates to `FSharp.Collections.Seq.toArray(seq { cexpr })`.
 
-Что меня немного удивило. Дело в том, что списки и массивы по своей природе фундаментально отличаются от `seq`-последовательностей, которые обладают свойством ленивости. Ленивость `seq`-последовательностей вынуждает компилятор генерировать достаточно большую “портянку”, а именно - конечный автомат (аналогично `yield return`-итераторам в C#), который разбивает выражение генерирования `seq`-последовательности на состояния, при этом все переменные внутри выражения хранятся в замыкании.
+This surprised me. Lists and arrays differ fundamentally from `seq` sequences, which are lazy. Supporting that laziness requires the compiler to generate a substantial amount of code: a state machine, much like the one generated for `yield return` iterators in C#. It splits the sequence expression into states and keeps its local variables in captured state.
 
-Всё это - абсолютно разумный оверхед, неободимый для поддержки ленивости. Но что насчёт массивов и списков? Знакомясь с F#, я почему-то был абсолютно уверен, что `[ ]` и `[| |]` отличаются по генерируемому коду от `seq { }` в положительную сторону, так как им вовсе не нужна инфраструктура отложенности, однако спецификация убедила в обратном…
+That overhead makes sense for a lazy sequence. But what about arrays and lists? When I first learned F#, I assumed that `[ ]` and `[| |]` would produce more efficient code than `seq { }`, since they do not need the machinery for deferred execution. The specification suggested otherwise.
 
-Стало интересно преодолеть как-либо данную проблему и придумалось реализовать свой *builder*-класс для computation expression, создающий списки и массивы в энергичном порядке. Вообще говоря, в F# все computation expressions компилируются в вызовы методов соответствующих builder-классов с передачей тьмы вложенных лямбда-выражений. Но есть одно исключение - выражения `seq { }` - для них F# генерирует более оптимальную реализацию на основе конечного автомата. Неужели можно обогнать оптимизированную, но отложенную реализацию `seq { }`?
+I wanted to see whether a custom computation expression *builder* could avoid this overhead by constructing arrays and lists eagerly. In general, F# compiles computation expressions into calls to builder methods, passing nested lambda expressions as arguments. Sequence expressions are a special case: the compiler generates an optimized state machine for `seq { }`. Could an eager builder outperform that optimized but lazy implementation?
 
-Оказывается, что можно. В этом нам поможет тот факт, что ключевое слово `inline` в F# позволяет определять не только встраиваемые `let`-определения, но и `member`-декларации. Определяя методы builder-класса как `inline`, можно устранить множество лямбда-выражений (но не все) и получить генерацию практически императивного код формирования списка/массива безо всякой отложенности. Сначала я реализовал `[| |]`, используя обычный класс `List<’T>` из состава .NET Framework:
+It turns out that it can. The key is that F# allows `inline` on `member` declarations as well as `let` bindings. Making the builder's methods `inline` eliminates many, though not all, of the lambdas. The resulting code constructs the collection in an almost imperative fashion, without deferred execution. I started with an alternative to `[| |]`, using the standard .NET `List<'T>` class:
 
 ```fsharp
 type FastArrayBuilder<'a>() =
@@ -38,9 +38,11 @@ type FastArrayBuilder<'a> with
 let inline fastarray<'a> = FastArrayBuilder<'a>()
 ```
 
-Обратите внимание, что builder-класс непосредственно является наследником `List<’T>` (!), а все его члены определены в расширении типа - это необходимо из-за того, что F# не допускает использование публичных членов, унаследованных от CLI-типов, в `inline`-определениях (возможно это и баг), а вот вариант с type extension вполне работает. Ещё следует обратить внимание на то, что `fastarray` является *[type function]({{ site.baseurl }}/2010/11/01/f-type-functions.html)* - это нужно, чтобы построение каждого `fastarray`-выражения начиналось с нового пустого `List<’T>`-списка. Каждое обращение к *значению*` fastarray` компилируется как новое вычисление выражения `FastArrayBuilder<’a>()` - то есть создание нового экземпляра списка.
+The builder inherits directly from `List<'T>`, but all its members are defined in a type extension. This works around a limitation in the F# compiler: it rejects calls to public members inherited from CLI types inside these `inline` definitions, while accepting the same calls in a type extension. This may be a compiler bug.
 
-Давайте сравним производительность в “полевых” условиях, генерируя массивы достаточно сложным выражением (к сожалению, дублирование кода тут избежать не удастся):
+Also, `fastarray` is a *[type function]({{ site.baseurl }}/2010/11/01/f-type-functions.html)*. Each `fastarray` expression needs to start with a fresh, empty `List<'T>`. Every reference to the *value* `fastarray` is compiled as another evaluation of `FastArrayBuilder<'a>()`, creating a new list instance.
+
+Let's compare the two approaches using a reasonably complex array expression. The benchmark repeats the same code for each builder:
 
 ```fsharp
 Measure.run [
@@ -79,11 +81,11 @@ Measure.run [
 ]
 ```
 
-Результаты получились следующими (на разных выражениях я получал прирост от 1.5 до 3 раз по сравнению с `[| |]`-выражениями), обратите внимание на количество сборок мусора (последний столбец):
+Here are the results. Across different expressions, I measured speedups of 1.5–3 times over `[| |]`. Pay particular attention to the garbage collection counts in the last column:
 
 ![]({{ site.baseurl }}/images/fsharp-array-seq.png)
 
-Окей, что насчёт такой основы F#, как списки? `[]`-выражения тоже базируются на `seq { }`, попробуем написать замену:
+What about lists, one of the foundations of F#? Since `[ ]` expressions also use `seq { }`, let's try an alternative builder for them:
 
 ```fsharp
 [<Struct>]
@@ -110,7 +112,7 @@ type FastListBuilder<'a> =
 let inline fastlist<'a> = FastListBuilder<'a>(1)
 ```
 
-Реализация существенно отличается от приведенной ранее. Теперь для builder’а используется значимый тип (меньше indirections), который хранит изменяемую ссылку на конец собранного списка, которую подменяет каждые `yield` и `yield!`. К сожалению, список собирается в обратном порядке, поэтому при запуске выражения его приходится переворачивать (если бы это был код стандартной библиотеки F#, то можно было бы мутировать список и собирать его в нужном порядке, но в пользовательском коде такой возможности нет). Тест:
+This implementation takes a different approach. The builder is a value type, which reduces indirection, and stores a mutable reference to the list accumulated so far. Each `yield` or `yield!` prepends elements to that list. This builds the list in reverse order, so `Run` has to reverse it before returning the result. Inside the F# standard library, we could mutate list nodes to build the list in the right order directly, but that option is not available in user code. Here is the benchmark:
 
 ```fsharp
 Measure.run [
@@ -149,10 +151,10 @@ Measure.run [
 ]
 ```
 
-Не смотря на разворот списка, результаты радуют (более чем в 2 раза меньше сборок мусора в первом поколении):
+Even with the cost of reversing the list, the results are encouraging: there are fewer than half as many generation 0 garbage collections:
 
 ![]({{ site.baseurl }}/images/fsharp-array-seq2.png)
 
-Если вам кажется, что выигрыш не оправдан, то задумайтесь - неизменяемые списки - это основа функционального языка, которым является F#. Такие фундаментальные возможности языка, как генераторы списков, просто обязаны работать настолько быстро, насколько это возможно.
+The improvement is worth considering. Immutable lists are fundamental to a functional language such as F#, and a core feature like list comprehensions should be as efficient as possible.
 
-p.s. Однако всё же есть сценарии, в которых нынешняя кодогенерация через `seq { }` будет оправдана. А вы знаете в каких случаях? :))
+P.S. There are still scenarios where the current translation through `seq { }` makes sense. Can you think of any?

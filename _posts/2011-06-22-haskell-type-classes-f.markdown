@@ -1,67 +1,69 @@
 ---
 layout: post
-title: "Эмуляция Haskell type classes в F#"
+title: "Emulating Haskell type classes in F#"
 date: 2011-06-22 15:41:00
 author: Aleksandr Shvedov
 tags: fsharp haskell ploymorphism ad-hoc typeclasses fprog
 ---
-Выбрав F# для изучения в качестве первого функционального языка, на самом деле мне всё равно пришлось разбираться с Haskell и OCaml, так как для них существует море различных материалов и документации, давно выработаны различные практики программирования и существуют многочисленные (по сравнению с F#) дружелюбно настроенные коммьюнити. Да и после небольшого изучения ML-языков разобраться с синтаксисом Haskell вовсе не составляет труда, а потом начинают затягивать интересные языковые особенности…
+Although I chose F# as my first functional language, I soon found myself learning about Haskell and OCaml as well. Both have extensive documentation, established programming practices, and large, welcoming communities compared with F#. After some exposure to ML languages, Haskell's syntax is not too difficult to pick up, and its language features soon become intriguing.
 
-По мере поверхностного знакомства с Haskell, я всё чаще стал встречать такое языковое средство, как классы типов (type classes), которые существуют в Haskell уже более десятка лет. Классы типов являются механизмом для поддержки специального (ad-hoc) полиморфизма, во многом напоминающим перегрузку функций в ООП-языках. Назначение классов типов - определение обобщённых операции над некоторым ограниченным множеством типов. Например, функции `(+)` и `(==)` в Haskell определены над некоторыми множествами типов, но не над всеми. Однако существует возможность расширить эти функции и на пользовательские типы.
+One feature I kept encountering was *type classes*, which have been part of Haskell for more than a decade. Type classes support *ad-hoc polymorphism*, in a way that resembles function overloading in object-oriented languages. They define operations over a particular set of types. For example, Haskell's `(+)` and `(==)` work with certain types, rather than with every type, and can be extended to user-defined types.
 
-Как выглядят классы типов в Haskell? Давайте рассмотрим следующий пример определения класса типа `Eq`, предназначенного для проверки эквивалентности двух значений:
+What does a type class look like? Here is `Eq`, which defines equality comparisons between two values:
 
 ```haskell
 class Eq a where
   (==) :: a -> a -> Bool
-  (!=) :: a -> a -> Bool
+  (/=) :: a -> a -> Bool
 
   x == y = not (x /= y)
   x /= y = not (x == y)
 ```
 
-В данной декларации мы определяем класс типов с именем `Eq`, для входящих в который типов `a` определены две операции `(==)` и `(!=)` с типом `a -> a -> Bool`. Дополнительно описаны реализации данных операций по-умолчанию, что позволяет расширять класс `Eq` для своих типов путём определения только одной из операций. Функции-члены класса типов на самом деле являются обычными функциями с интересной сигнатурой: `(==) :: Eq a => a -> a -> Bool`. Часть `Eq a =>` в определении типа называют “контекстом”, который для .NET-программиста гораздо чаще встречался под термином *generic type parameter constraint* (ограничение на тип-параметр). То есть `Eq a =>` - просто ограничение на тип-параметр `a`, требующее вхождение типа `a` в класс типов `Eq`.
+This declaration defines a type class named `Eq`. For each type `a` with an `Eq` instance, it provides two operations, `(==)` and `(/=)`, of type `a -> a -> Bool`. Each operation has a default implementation in terms of the other, so defining either one is enough to implement an instance.
 
-А давайте перепишем эту декларацию в виде обычного определения абстрактного класса в F#?
+Type class methods are functions with an interesting signature: `(==) :: Eq a => a -> a -> Bool`. The `Eq a =>` part is called a *context*. For a .NET programmer, it is helpful to compare this with a *generic type parameter constraint*: it requires an `Eq` instance for the type argument `a`.
+
+Let's express the same idea as an ordinary abstract class in F#:
 
 ```fsharp
-// абстрактный класс, параметризованный типом 'a
+// an abstract class parameterized by 'a
 [<AbstractClass>]
 type Eq<'a>() =
-  // никакого состояния, только абстрактные члены
+  // no state, only abstract members
   abstract equals    : 'a -> 'a -> bool
   abstract notEquals : 'a -> 'a -> bool
-  // и реализации этих членов по-умолчанию
+  // default implementations of those members
   default __.equals x y = not (__.notEquals x y)
   default __.notEquals x y = not (__.equals x y)
 ```
 
-Выглядит похоже, не так ли? Теперь перейдём к определениям экземпляров классов типов (расширении класса на новый конкретный тип):
+The structure is very similar. Next, we need a *type class instance*, which supplies these operations for a concrete type:
 
 ```haskell
 instance Eq Integer where
   (==) = eqInteger
 ```
 
-То есть мы заменяем тип-параметр `a` на конкретный тип, которым мы хотим расширить класс `Eq` и реализуем любой из членов (или сразу оба). Функция `eqInteger :: Integer -> Integer -> Bool` специализирована на сравнении целых чисел. Перепишем на F#?
+We replace the type parameter `a` with the concrete type and implement one or both operations. Here, `eqInteger :: Integer -> Integer -> Bool` is a function specialized for integer equality. We can express the same idea in F#:
 
 ```fsharp
-// экземпляр класса типа - наследник Eq<'a>
+// a type class instance is represented by a subclass of Eq<'a>
 let intEq =
-  { new Eq<int>() with // конкретный тип 'a
+  { new Eq<int>() with // a concrete choice of 'a
       override __.equals x y = (x = y) }
 ```
 
-Компилятор Haskell гарантирует уникальность экземпляров - нельзя определить ещё один экземпляр `Eq Integer` с другой реализацией, а вот в F# нас никто не ограничивает в создании другого наследника `Eq<’a>`.
+Haskell enforces instance uniqueness: we cannot define a second `Eq Integer` instance with a different implementation. Our F# encoding imposes no such restriction; we can create another object derived from `Eq<'a>` whenever we like.
 
-Теперь можно написать функцию, использующую операции из класса типов `Eq`. Простейшая функция ниже удаляет из списка все вхождения заданного элемента:
+Now we can write a function that uses the operations of `Eq`. This one removes every occurrence of a given element from a list:
 
 ```haskell
 remove :: Eq a => a -> [a] -> [a]
 remove x xs = filter (/= x) xs
 ```
 
-Обратите внимание на сигнатуру функции - контекст `Eq` a выбрался “наружу” и теперь присутствует и в типе функции `remove`. Это ограничивает нас в использовании функции `remove` только над такими списками, элементами которых являются типы, входящие в класса типов `Eq`. Самое интересное - как такую функцию реализовать в F# без магии компилятора?
+The `Eq a` constraint has propagated into the type of `remove`. We can therefore use `remove` only with lists whose element type has an `Eq` instance. How can we implement the same function in F# without compiler support for type classes?
 
 ```fsharp
 /// remove : Eq<'a> -> 'a -> 'a list -> 'a list
@@ -69,18 +71,18 @@ let remove (hidden: Eq<_>) x xs =
   List.filter (hidden.notEquals x) xs
 ```
 
-Очень просто - в функцию необходимо добавить аргумент (который скрывается от пользователя компилятором Haskell) типа `Eq<’a>`, содержащий нужный экземпляр класса типа. Данная техника называется *dictionary passing* - компилятор Haskell скрыто передаёт “словарь” из функций-членов класса типов. Нам же в F# приходится самим находить нужный экземпляр `Eq<’a>`, определённый заранее (который и представляет собой этот “словарь”), и передавать его явным параметром:
+We add an argument of type `Eq<'a>` containing the required instance. This technique is called *dictionary passing*: the Haskell compiler implicitly passes a dictionary containing the type class operations. In F#, we have to select the appropriate `Eq<'a>` object ourselves and pass it explicitly:
 
 ```fsharp
 > remove intEq 1 [1; 2; 1; 1; 3]
 val it : int list = [2; 3]
 ```
 
-Вот и всё - простейшие классы типов представляют собой лишь неявные параметры (implicit parameters), которые компилятор разрешает по месту вызова! В случае вызова функции с `Eq a =>` другой функции с `Eq a =>` “словарь” просто передаётся между функциями по цепочке. Вызов функции-члена класса типов не тяжелее обычного виртуального вызова метода класса. Все другие функции с контекстами в сигнатуре получают overhead в виде скрытых дополнительных параметров по числу контекстов.
+At this level, type classes amount to implicit arguments supplied by the compiler. If one function with an `Eq a` constraint calls another with the same constraint, it can simply pass the dictionary along. Calling a type class method is comparable to a virtual method call. Other functions with constraints receive additional hidden dictionary parameters, one for each required constraint.
 
-Самая соль классов типов в том, что экземпляры вовсе отделены от типа, для которого они определяются - можно определить понятие эквивалентности (экземпляр `Eq`) для какого-нибудь чужого типа из сторонней библиотеки, не изменяя кода самой библиотеки (например, чтобы реализовать сторонним типом некоторые интерфейсы, отвечающие за проверку эквивалентности). Эта простая особенность открывает очень и очень интересные возможности Haskell, позволяет решить *[expression problem](http://en.wikipedia.org/wiki/Expression_problem)* и эмулировать [*открытые* типы данных и функций](http://lambda-the-ultimate.org/node/1453).
+A key property of type classes is that an instance is separate from the type it describes. We can define equality—an `Eq` instance—for a type from a third-party library without changing that library. There is no need to modify the original type to make it implement an equality interface. This separation enables approaches to the *[expression problem](https://en.wikipedia.org/wiki/Expression_problem)* and to [*open* data types and functions](http://lambda-the-ultimate.org/node/1453).
 
-Кстати, контексты можно размещать не только в сигнатурах функций, но и в других определениях классов типов и даже экземпляров классов типов. Фактически это добавляет в классы типов понятие наследования:
+Contexts can appear not only in function signatures, but also in type class and instance declarations. In a class declaration, they introduce a form of inheritance:
 
 ```haskell
 class (Eq a) => Ord a where
@@ -89,10 +91,10 @@ class (Eq a) => Ord a where
   max, min             :: a -> a -> a
 ```
 
-Причём множественного наследования, так как ограничений может быть несколько. Но все эти возможности можно изобразить и в виде классов, либо через отношения наследования (в случае одиночного “наследования” классов типов), либо через агрегирование словарей в словарях (в случае множественного).
+A context can contain several constraints, so this also allows multiple inheritance between type classes. We can model these relationships with ordinary classes: use inheritance for a single superclass, or store the required superclass dictionaries inside another dictionary when there are several.
 
-Сложность в понимании классов типов Haskell создаёт только алгоритм, по которым компилятор находит нужный экземпляр класса типов (аналог алгоритма overload resolution в ООП-языках), особенно в случае использования языковых расширений, допускающих определения классов типов с [несколькими типами-параметрами](http://www.haskell.org/haskellwiki/Multi-parameter_type_class) (то есть наборы операций, определённых для комбинаций нескольких типов), между которыми ещё и могут быть заданы [функциональные зависимости](http://www.haskell.org/haskellwiki/Functional_dependencies).
+The more involved part is instance resolution: how the compiler finds the required type class instance. It plays a role similar to overload resolution in object-oriented languages. This becomes particularly interesting with extensions such as [multi-parameter type classes](https://wiki.haskell.org/Multi-parameter_type_class), which define operations for combinations of types, and [functional dependencies](https://wiki.haskell.org/Functional_dependencies) between those parameters.
 
-Классы типов очень хорошо зарекомендовали себя в Haskell, почему их нет в F#? Не смотря на отсутствие классов типов в F#, имеющиеся средства объектно-ориентированной стороны языка - классы, виртуальные функции и перегрузка - легко позволяют выражать функционал классов типов, например, как это было показано выше. Классы типов стали бы возможностью одного языка, 80% их функционала так или иначе давно покрыты в базовых классах .NET Framework.
+Type classes have proved useful in Haskell, so why does F# not have them? F#'s object-oriented features—classes, virtual methods, and overloading—already let us express much of the same functionality, as the examples above demonstrate. Type classes would be an F#-specific feature, while much of their practical role is already covered by the .NET Framework's base class libraries.
 
-Однако мы пока совсем упускаем из виду большую область применения классов типов, требующую от системы типов поддержку полиморфизма конструкторов типов (*type constructor polymorphism*), речь о котором пойдёт в следующем посте.
+There is still a large area of type class usage that we have not considered. It requires *type constructor polymorphism*, which I will discuss in the next post.

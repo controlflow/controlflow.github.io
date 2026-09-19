@@ -1,15 +1,15 @@
 ---
 layout: post
-title: "F# Research Compiler with Joinads!"
+title: "F# research compiler with joinads"
 date: 2011-03-28 23:08:00
 author: Aleksandr Shvedov
 tags: fsharp joinads expreremental compiler computation expressions monads
 ---
-Совсем недавно Tomas Petricek выложил в свет (оригинальный пост [здесь](http://tomasp.net/blog/fsharp-variations-joinads.aspx)) эксперементальную сборку компилятора F# 2.0, поддерживающую механизм под названием *joinads*, а так же некоторые дополнительные модификации.
+Tomas Petricek recently released an experimental build of the F# 2.0 compiler with support for *joinads* and a few other extensions. See his [announcement](https://tomasp.net/blog/fsharp-variations-joinads.aspx/) for details.
 
-Основная информация о механизме “джоинад” есть в публикации *"Reactive, parallel and concurrent programming in F#"* (pdf [здесь](http://tomasp.net/academic/joinads/joinads.pdf)), описывающей области применения, необходимые расширения синтаксиса F# computation expressions, правила трансформации кода (однако реальные правила трансформации кода несколько отличаются от изложенных в публикации, например, `Choose` не получает на вход список, а используюся несколько вложенных друг в друга вызовов `Choose`).
+The paper [*Reactive, parallel and concurrent programming in F#*](https://tomasp.net/academic/papers/joinads/joinads.pdf) describes joinads, their applications, the required extensions to F# computation expression syntax, and the translation rules. The implementation differs slightly from the paper: for example, rather than passing a list to `Choose`, it generates nested calls to `Choose`.
 
-Например, так выглядит код использования джоинады `future`, запускающий несколько параллельных задач и ожидающих их результатов:
+For example, the `future` joinad lets us start tasks in parallel and wait for their results:
 
 ```fsharp
 let parallelOr = future {
@@ -20,10 +20,10 @@ let parallelOr = future {
 }
 ```
 
-Если любая из задач возвратит `true`, то всё выражение сразу будет вычислено как `true`. В случае, если любая из задач возвратит `false`, будет произведено ожидание результата другой задачи и выражение будет вычислено как логическое `||` результатов обоих задач (третий кейс).
+If either task returns `true`, the whole expression immediately evaluates to `true`. If a task returns `false`, the expression waits for the other task. Once both results are available, the third case combines them with logical `||`.
 
-Дополнительно эксперементальный компилятор поддерживает механизм “идиом” (аппликативных функторов из мира haskell) с помощью использования синтаксиса `let! … and` внутри computation expressions. Подробнее про идиомы можно прочитать в том же блоге Томаса - [1](http://tomasp.net/blog/idioms-in-linq.aspx) и [2](http://tomasp.net/blog/formlets-in-linq.aspx) (если не напрягает query syntax C#, конечно).
+The experimental compiler also supports *idioms* (applicative functors in Haskell terminology) through `let! … and` syntax inside computation expressions. Tomas has two related articles, [Idioms in LINQ](https://tomasp.net/blog/idioms-in-linq.aspx/) and [Formlets in LINQ](https://tomasp.net/blog/formlets-in-linq.aspx/), illustrated using C# query syntax.
 
-Следует предупредить, что новые ключевые слова и конструкции, такие как `match!`, поддерживаются на уровне компилятора и интерактивной консоли F#, однако использование данный расширений непосредственно в Visual Studio затруднительно, так как студия использует собственные парсер и модель кода F# - вы будете получать море синтаксических ошибок, однако код будет компилироваться и исправно запускаться.
+The compiler and F# Interactive support new constructs such as `match!`, but using them in Visual Studio is less straightforward. The IDE has its own F# parser and code model, so it reports many syntax errors even though the code compiles and runs correctly.
 
-Скачать модифицированный компилятор можно здесь: [сборка](http://tomasp.net/articles/fsharp-joinads/fsharp-joinads.zip) (zip, 7mb), [исходный код](https://github.com/tpetricek/Fsharp.Extensions) (для mono). Помимо этого, [здесь](https://github.com/tpetricek/Documents/tree/master/Blog%202011/Joinads) доступны примеры реализаций джоинад `future` и `maybe`, а так же идиомы `ziplist`.
+The modified compiler is available as a [binary download](https://tomasp.net/articles/fsharp-joinads/fsharp-joinads.zip) (ZIP, 7 MB) or as [source code for Mono](https://github.com/EHotwagner/FSharp.Extensions/tree/f95df60b5a3b2e72cb7ab8d3f10daf60bba73d8e) (preserved in a fork). There are also [sample implementations](https://github.com/tpetricek/Documents/tree/master/Blog%202011/Joinads) of the `future` and `maybe` joinads and the `ziplist` idiom.

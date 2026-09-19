@@ -5,89 +5,89 @@ date: 2011-04-18 18:00:00
 author: Aleksandr Shvedov
 tags: fsharp dotnet clr arrays covariance
 ---
-С давних времён (ещё с первой версии) в систему типов .NET введена такая штука, как ковариантные массивы. Эта фича разрешает неявные приведения типа массивов из элементов типа `B` к типу массивов из элементов типа `A`, если существует *неявное ссылочное* приведение типа `B` к типу `A` (то есть типы-значения сразу отпадают).
+Array covariance has been part of the .NET type system since its first release. It allows an implicit conversion from an array of `B` to an array of `A` whenever there is an *implicit reference conversion* from `B` to `A`. Arrays of value types are therefore excluded.
 
-К сожалению, язык F# не предусматривает работу с вариантностью/ковариантностью вовсе (даже аннотации в определениях типов интерфейсов и делегатов). Однако, так как поддержку ковариантности массивов обеспечивает рантайм, фичей всё равно можно воспользоваться, через даункаст из типа `obj` (то есть с проверкой времени выполнения):
+F# has no syntax for variance annotations on interface or delegate definitions, and it does not apply array covariance implicitly. The runtime still supports array covariance, however, so we can use it through a downcast from `obj`, with a runtime type check:
 
 ```fsharp
 let xs : string array = [| "abc"; "def"; "ghi" |]
 let ys : obj array    = downcast (box xs)
 ```
 
-Интерес представляет то, что если теперь воспользоваться данным массивом как обычным массивом `obj[]` и сохранить в него ссылку на какой-либо экземпляр другого ссылочного типа, то мы получим исключение `System.ArrayTypeMismatchException`:
+If we now treat this as an ordinary `obj[]` and try to store an instance of another reference type in it, we get a `System.ArrayTypeMismatchException`:
 
 ```fsharp
-// ys на самом деле string[]
+// ys is actually a string[]
 ys.[0] <- new obj()
 ```
 
-То есть вместе с массивом хранится дополнительная информация о том, элементы какого типа он всё же может хранить и при каждой записи в массив элементов ссылочного типа осуществляется проверка времени исполнения. Однако проверка происходит не только при записи, но и взятии адреса:
+The runtime keeps track of the array's actual element type and checks writes to arrays of reference types. This check is required not only when writing an element, but also when taking its address:
 
 ```fsharp
 type Foo =
-  // метод с byref-параметром
+  // a method with a byref parameter
   static member Bar(x: obj byref) =
     x <- new obj()
 
-Foo.Bar(&ys.[0]) // буууух!
+Foo.Bar(&ys.[0]) // throws ArrayTypeMismatchException
 ```
 
-Таким образом, ~~слизав данную фичу с Java~~ реализовав подобную сомнительную возможность, команда CLR добавила оверхэд ко всем операциям записи в массивы ссылочных типов, а значит прибавили тормозов ко всем коллекциям, базирующимся на массивах (например, `System.Collections.Generic.List<T>`, но не для списков F#).
+Supporting array covariance therefore adds overhead to writes into arrays of reference types. This also affects collections built on top of those arrays, such as `System.Collections.Generic.List<T>` when `T` is a reference type. F# lists, which are not backed by arrays, are unaffected.
 
-Воспользовавшись кодом из [данного поста]({{ site.baseurl }}/2011/02/05/fsharp-measure.html), померяем влияние проверки времени выполнения, сравнив скорость с массивом специальных типов-значений, просто оборачивающих в себя значения типа `'a`:
+Using the benchmarking code from [this post]({{ site.baseurl }}/2011/02/05/fsharp-measure.html), let's measure the cost of the runtime check. We will compare a regular array with an array of value types that simply wrap a value of type `'a`:
 
 ```fsharp
-/// Тип-значение, представляющий собой
-/// некую ячейку хранения значения типа 'a
+/// A value type representing
+/// a storage cell for a value of type 'a
 [<Struct>]
 type Holder<'a> =
-  new x = { Value = x }   // конструктор
-  val mutable Value: 'a   // изменяемая ячейка
+  new x = { Value = x }   // constructor
+  val mutable Value: 'a   // mutable storage cell
 
-// и произвольное значение ссылочного типа
+// an arbitrary value of a reference type
 let ref_value = "abc"
 
-Measure.run [ // тестирование скорости записи
+Measure.run [ // measure write performance
 
-  "запись элементов в массив",
+  "write array elements",
   fun () -> let xs = Array.zeroCreate 1
             for i = 0 to 100000 do
                 xs.[0] <- ref_value
 
-  "запись обёрнутых элементов",
+  "write wrapped elements",
   fun () -> let xs = Array.zeroCreate 1
             for i = 0 to 100000 do
                 xs.[0] <- Holder ref_value
 ]
 
-Measure.run [ // тестирование скорости чтения
+Measure.run [ // measure read performance
 
-  "чтение элементов в массива",
+  "read array elements",
   fun () -> let xs = [| "abc" |]
             for i = 0 to 100000 do
                 ignore xs.[0]
 
-  "чтение обёрнутых элементов",
+  "read wrapped elements",
   fun () -> let xs = [| Holder "abc" |]
             for i = 0 to 100000 do
                 ignore xs.[0].Value
 ]
 ```
 
-Результаты (у меня Core i3 380M @ 2533 Mhz), запись:
+Here are the results on my Core i3 380M at 2.533 GHz. First, writes:
 
 ![]({{ site.baseurl }}/images/array-covariance.png)
 
-Чтение:
+Reads:
 
 ![]({{ site.baseurl }}/images/array-covariance2.png)
 
-Оверхэд небольшой, конечно же, особенно с учётом того, что запись элемента массива сама по себе ооочень быстра. Однако в масштабах рантайма и фрэймворка, замедление в 1.5-2 раза всё же играет роль. Интересно, что проверка может быть устранена для массивов `sealed`-типов, однако на практике этого не происходит.
+The absolute overhead is small: writing an array element is a very fast operation to begin with. Even so, a slowdown of 1.5–2 times can matter across the runtime and framework. In principle, the check could be eliminated when the array's element type is known to be `sealed`, but that does not happen in these measurements.
 
-Данную технику оборачивания в тип-значение можно применять при реализации собственных изменяемых коллекций структур данных, базирующихся на массивах. Чтение из такого массива не имеет оверхэда (либо он меньше погрешности измерения).
+This value-type wrapper technique can be useful when implementing mutable collections and data structures backed by arrays. Reading the wrapped values has no measurable overhead here, or at least none above the noise in the measurements.
 
 *— update —*
 
-Результаты Mono 2.10 for Windows немного отличаются (обратите внимание на заметно меньшее количество итераций):
+The results for Mono 2.10 on Windows are somewhat different. Note the substantially lower iteration count:
 
 ![]({{ site.baseurl }}/images/array-covariance3.png)

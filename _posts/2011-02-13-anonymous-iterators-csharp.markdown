@@ -1,27 +1,28 @@
 ---
 layout: post
-title: "Анонимные итераторы в C#?"
+title: "Anonymous iterators in C#?"
 date: 2011-02-13 22:00:00
 author: Aleksandr Shvedov
 tags: csharp async yield yield return await try finally asyncctp asyncenumerator lambda-expressions
 ---
-Сегодня мы поиграем с новыми фичами C# 5.0 из состава [Async CTP](http://www.microsoft.com/downloads/en/details.aspx?FamilyID=18712f38-fcd2-4e9f-9028-8373dc5732b2&displaylang=en), а конкретно с новыми трансформациями на уровне компилятора для поддержки ключевых слов `async`/`await` (скорее всего в релизе эти ключевые слова будут другими, общественность не радостно встретила такой выбор). [Тут]({{ site.baseurl }}/assets/docs/csharp-asynchronous-functions-specification-async-ctp-2010-10-28.docx) лежит спека с подробным описанием нововведений, однако на данный момент компилятор C# не сильно ей следует.
+Today I want to explore the new C# 5.0 features in the [Async CTP](https://web.archive.org/web/20110222212138/http://www.microsoft.com/downloads/en/details.aspx?FamilyID=18712f38-fcd2-4e9f-9028-8373dc5732b2&displaylang=en), specifically the compiler transformations behind `async` and `await`. I suspect the keyword names may change before release, given their mixed reception. The [specification]({{ site.baseurl }}/assets/docs/csharp-asynchronous-functions-specification-async-ctp-2010-10-28.docx) describes the feature in detail, although the current compiler does not follow it particularly closely.
 
-По своей сути фича очень и очень простая, а необходимые для её реализации элементы имеются в компиляторе ещё начиная с версии C# 2.0 - это трансформации, которые компилятор делает для `yield return`-итераторов. Трансформация заключается в разбиение метода-итератора на набор состояний по точкам вызова `yeild return`/`yield break`, а затем компилирование класса, реализующего `IEnumerable<T>` (или `IEnumerator<T>` и не обобщённые версии обоих) с большим `switch` по состояниям исходного метода в реализации `MoveNext()`. Очень хорошо и подробно про имплементацию итераторов в Microsoft’ском компиляторе C# пишет Jon Skeet [здесь](http://csharpindepth.com/Articles/Chapter6/IteratorBlockImplementation.aspx).
+The core idea is simple, and the compiler has had much of the necessary machinery since C# 2.0: the transformation used for `yield return` iterators. It splits an iterator method into states at `yield return` and `yield break` statements, then generates a class implementing `IEnumerable<T>` or `IEnumerator<T>` (or their non-generic counterparts). The generated `MoveNext()` method contains a large `switch` over those states. Jon Skeet gives a detailed explanation of Microsoft's implementation in [this article](https://csharpindepth.com/Articles/IteratorBlockImplementation).
 
-Такие крутые дядьки как Jeffrey Richter ещё давным давно придумали использовать эту же трансформацию компилятора для упрощения работы с различными асинхронными операциями. Такие штуки, как `[AsyncEnumerator](http://msdn.microsoft.com/en-us/magazine/cc546608.aspx)`, позволяли представить асинхронный код практически так же, как синхронный, без моря лямбда-выражений и замыканий. К сожалению, данное решение нельзя назвать достаточно симпатичным из-за необходимости общения в блоке итератора со вспомогательными классами.
+Developers such as Jeffrey Richter have long used this transformation to simplify asynchronous programming. Helpers such as [AsyncEnumerator](https://learn.microsoft.com/en-us/archive/msdn-magazine/2008/june/concurrent-affairs-simplified-apm-with-the-asyncenumerator) let asynchronous code read much like synchronous code, without a forest of lambdas and closures. The drawback is that the iterator body still has to interact with helper classes.
 
-Сегодня мы решим обратную задачу - сделаем из `async`-методов блоки `yield`-итераторов! А так как в качестве `async`-методов могут выступать лямбда-выражения, то мы можем получить анонимные итераторы в C# (`yield return` в лямбда выражениях [запрещён](http://blogs.msdn.com/b/ericlippert/archive/2009/08/24/iterator-blocks-part-seven-why-no-anonymous-iterators.aspx)):
+Let's try the reverse: use `async` methods to implement `yield` iterators. Since lambdas can be asynchronous, this would give us anonymous iterators in C#, where `yield return` is [not allowed inside lambdas](https://learn.microsoft.com/en-us/archive/blogs/ericlippert/iterator-blocks-part-seven-why-no-anonymous-iterators). Here is an ordinary async lambda to start with:
 
 ```c#
-Func<string, Task<int>> f = async url => {
+Func<string, Task> f = async url =>
+{
   var web = new System.Net.WebClient();
   var page = await web.DownloadStringTaskAsync(url);
   Console.WriteLine(page);
 };
 ```
 
-Итак, приступим:
+Now for the implementation:
 
 ```c#
 using System;
@@ -33,32 +34,36 @@ public static class Iterator
 {
 ```
 
-Определим вложенный класс-awaiter (пользователь вовсе не должен замечать этот класс, он необходим для инфраструктуры C# `async`):
+First, define a nested awaiter class. It is part of the C# `async` infrastructure; callers should not need to use it directly:
 
 ```c#
-public abstract class Awaiter<T> {
+public abstract class Awaiter<T>
+{
   public Awaiter<T> GetAwaiter() { return this; }
   public abstract bool BeginAwait(Action next);
   public abstract void EndAwait();
 }
 ```
 
-Согласно спецификации, любое выражение под `await` должно обладать экземплярным методом (или extension-методом) с именем `GetAwaiter`, возвращающее значение типа, в котором определены методы `BeginAwait` и `EndAwait`. Первый из них должен иметь параметр типа `System.Action` и возвращать `bool`-значение, второй - не иметь параметров и возвращать значение любого типа или `void`.
+According to the CTP specification, an expression used with `await` must have an instance or extension method named `GetAwaiter`. The returned type must define `BeginAwait` and `EndAwait` methods. `BeginAwait` takes a `System.Action` and returns `bool`; `EndAwait` takes no arguments and may return a value of any type or `void`.
 
-Смысл всего этого добра очень прост - когда вы ожидаете с помощью `await` какое-либо выражение, то у этого выражение вызывается метод `GetAwaiter()` и у возвращённого значения вызывается `BeginAwait`, при этом туда передаётся некий `Action`-делегат. Внутри себя `BeginAwait` как-либо запускает асинхронную операцию, а в качестве callback’а использует переданный `Action`-делегат. Если запуск асинхронной операции произошёл успешно, то `BeginAwait` возвращает `true` и исполнение `async`-метода прерывается (управление возвращается коду, вызвавшему `async`-метод). Позже, когда асинхронная операция завершится, она вызывает в качестве callback’а `Action`-делегат, который на самом деле вызывает продолжение исполнения `async`-метода с момента последнего `await`'а. При этом у последнего awaiter-класса вызывается метод `EndAwait`, который может вернуть результат асинхронной операции (как в примере выше). Помимо всего этого, `BeginAwait` может вернуть `false` и тогда выполнение `async`-метода продолжится синхронно (например, если операция выполнилась очень быстро и не потребовала асинхронности), с последующим вызовом `EndAwait` для получения результата.
+When an expression is awaited, the generated code calls its `GetAwaiter()` method, then calls `BeginAwait` on the result, passing an `Action` delegate. `BeginAwait` starts the asynchronous operation and arranges for that delegate to be called when it completes. If the operation starts asynchronously, `BeginAwait` returns `true` and execution of the `async` method is suspended, returning control to its caller.
 
-В нашей реализации тип значения под `await`-выражением и класс-awaiter являются одним и тем же типом, поэтому `GetAwaiter` просто делает `return this`.
+When the operation completes, the callback resumes the `async` method at the last `await`. The awaiter's `EndAwait` method is then called to retrieve the result, if any. Alternatively, `BeginAwait` can return `false` when no suspension is needed, for example because the operation has already completed. The method then continues synchronously, still calling `EndAwait` to obtain the result.
 
-Далее определим тип делегата, возвращающий описанный нами класс-awaiter, им будет удобнее пользоваться в дальнейшем, чем `Func<T, Awaiter<T> >`:
+In our implementation, the awaited value and its awaiter are the same object, so `GetAwaiter` simply returns `this`.
+
+Next, define a delegate type that returns our awaiter. This will be more convenient to use than `Func<T, Awaiter<T>>`:
 
 ```c#
 public delegate Awaiter<T> Yield<T>(T value);
 ```
 
-Главный метод из public surface получает `Action`-делегат (который должен являться `async`-методом) с единственным параметром типа делегата `Yeild<T>`:
+The main public method accepts an `Action` delegate representing an `async` method with a single parameter of type `Yield<T>`:
 
 ```c#
-public static IEnumerable<T> Of<T>(Action<Yield<T>> @async) {
+public static IEnumerable<T> Of<T>(Action<Yield<T>> @async)
+{
   if (@async == null)
     throw new ArgumentNullException("async");
 
@@ -66,61 +71,70 @@ public static IEnumerable<T> Of<T>(Action<Yield<T>> @async) {
 }
 ```
 
-Теперь самое сложное, реализация класса `IteratorAwaiter<T>`:
+The main work is in `IteratorAwaiter<T>`:
 
 ```c#
-sealed class IteratorAwaiter<T> : Awaiter<T>, IEnumerator<T>, IEnumerable<T> {
-  readonly Action<Yield<T>> @async;
-  readonly int initialThreadId;
-  Action moveNext;
-  T currentValue;
+private sealed class IteratorAwaiter<T> : Awaiter<T>, IEnumerator<T>, IEnumerable<T>
+{
+  private readonly Action<Yield<T>> @async;
+  private readonly int initialThreadId;
+  private Action moveNext;
+  private T currentValue;
 
-  public IteratorAwaiter(Action<Yield<T>> @async) {
+  public IteratorAwaiter(Action<Yield<T>> @async)
+  {
     this.@async = @async;
     this.initialThreadId = Thread.CurrentThread.ManagedThreadId;
     this.moveNext = InitialMoveNext;
   }
 ```
 
-Класс сохраняет в поле `Action`-делегат из `async`-метода и идентификатор текущего потока (это нужно для тех же целей, что и в итераторах). При этом поле `moveNext` изначально указывает на метод `InitialMoveNext`, который запускает `async`-метод и в качестве делегата `Yield<T>` передаёт лямбда-выражение, устанавливающее значение полю `currentValue` и возвращающее класс `IteratorAwaiter<T>` инфраструктуре `async` в качестве `Awaiter<T>`:
+The class stores the `Action` delegate for the `async` method and the current thread ID, for the same reason as a compiler-generated iterator. Initially, `moveNext` points to `InitialMoveNext`. That method invokes the `async` delegate, passing a lambda as its `Yield<T>` argument. The lambda sets `currentValue` and returns this `IteratorAwaiter<T>` instance as the `Awaiter<T>` expected by the `async` infrastructure:
 
 ```c#
-void InitialMoveNext() {
+private void InitialMoveNext()
+{
   this.moveNext = null;
-  this.@async(value => {
+  this.@async(value =>
+  {
     this.currentValue = value;
     return this;
   });
 }
 ```
 
-Данный код решает проблему того, что `async`-методы в C# не являются отложенными - код до первого `await` всегда вызывается *синхронно*, а вот исполнение `yield return`-итераторов всегда отложено до первого вызова `MoveNext`. Поэтому, чтобы из `async`-метода сделать итератор, надо отложить вызов `@async` до первого вызова `MoveNext`.
+This delays execution until the first call to `MoveNext`. An `async` method is not lazy: the code before its first `await` runs *synchronously* when the method is called. A `yield return` iterator, however, does not start executing until `MoveNext` is called. Deferring the invocation of `@async` gives us the same behavior.
 
-Теперь реализация `Awaiter<T>`, которая просто сохраняет делегат продолжения в то же поле `moveNext` и обнуляет его при продолжении работы `async`-метода (вызов `EndAwait`):
+The `Awaiter<T>` implementation stores the continuation delegate in `moveNext`, then clears the field when execution resumes and `EndAwait` is called:
 
 ```c#
-public override bool BeginAwait(Action next) {
+public override bool BeginAwait(Action next)
+{
   this.moveNext = next;
   return true;
 }
 
-public override void EndAwait() {
+public override void EndAwait()
+{
   this.moveNext = null;
 }
 ```
 
-Реализация `IEnumerator<T>` раскрывает все секреты:
+The `IEnumerator<T>` implementation ties this together:
 
 ```c#
-public T Current {
+public T Current
+{
   get { return this.currentValue; }
 }
 
-object IEnumerator.Current {
+object IEnumerator.Current
+{
   get { return this.currentValue; }
 }
 
-public bool MoveNext() {
+public bool MoveNext()
+{
   if (this.moveNext == null) return false;
 
   this.moveNext();
@@ -131,69 +145,82 @@ public void Reset() { }
 public void Dispose() { }
 ```
 
-Знаток итераторов тут же заметит некорректную реализацию `Dispose`, однако я пока отложу обсуждение данной проблемы. Интерес представляет метод `MoveNext`, который вызывает делегат из поля `moveNext`, и проверяет это же поле после вызова на `null`. Дело в том, что если в `async`-методе не останется `await`'ов, то последний вызов `EndAwait` установит поле `moveNext` в `null` и итератор должен будет сообщить, что он “закончился”.
+If you are familiar with iterators, you will immediately notice that `Dispose` is incomplete; I will return to that shortly. For now, look at `MoveNext`: it invokes the delegate in `moveNext`, then checks whether that field is `null`. If the `async` method reaches its end without another `await`, the last call to `EndAwait` leaves `moveNext` set to `null`, indicating that iteration has finished.
 
-Наконец, реализация `IEnumerable<T>`, которая создаёт копию `IteratorAwaiter<T>` если запрашивают ещё один `IEnumerator<T>` из другого потока или когда этот экземпляр уже хоть раз использовали для перебора (именно поэтому `InitialMoveNext` первым делом обнуляет поле `moveNext`) - это необходимо для поддержки оптимизации, при которой `IEnumerable<T>` и `IEnumerator<T>` являются одним и тем же экземпляром, так же как в итераторах C#:
+Finally, `IEnumerable<T>` reuses this instance as the enumerator if it is requested on the original thread before iteration has started. Otherwise, it creates another `IteratorAwaiter<T>`. Clearing `moveNext` at the start of `InitialMoveNext` ensures that enumeration is no longer considered unstarted. This is the same allocation-saving approach used by C# iterators, where the enumerable and its first enumerator can be the same object:
 
 ```c#
-public IEnumerator<T> GetEnumerator() {
+public IEnumerator<T> GetEnumerator()
+{
   if (Thread.CurrentThread.ManagedThreadId != this.initialThreadId ||
       this.moveNext == null ||
-      this.moveNext.Target != this) {
+      this.moveNext.Target != this)
+  {
     return new IteratorAwaiter<T>(@async);
   }
 
   return this;
 }
 
-IEnumerator IEnumerable.GetEnumerator() {
+IEnumerator IEnumerable.GetEnumerator()
+{
   return GetEnumerator();
 }
 ```
 
-Вот и всё, полный исходный код доступен [здесь](http://ideone.com/cvNkF). Понимаю, выглядит это всё жестоко, но если есть желание поглубже разобраться со внутренностями Async CTP, то очень советую побегать по данному коду отладчиком.
+The [complete source code was originally published on ideone](http://ideone.com/cvNkF). Stepping through it in a debugger is a useful way to explore how the Async CTP works.
 
-Теперь мы можем определять итераторы в виде лямбда-выражений и это даже не особо страшно выглядит (к сожалению, необходима явная аннотация типа итератора):
+We can now write iterators as lambda expressions. The syntax is reasonably compact, although the element type must be supplied explicitly:
 
 ```c#
-var xs = Iterator.Of<int>(async yield => {
+var xs = Iterator.Of<int>(async yield =>
+{
   await yield(100);
   await yield(200);
 
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 10; i++)
+  {
     await yield(i);
 
     if (i % 6 == 0)
-      return; // вместо yield break
+      return; // instead of yield break
   }
 });
 
-foreach (var x in xs) {
+foreach (var x in xs)
+{
   Console.WriteLine(x);
 }
 ```
 
-Обратите внимание, что всё лямбда-выражение приводится к типу делегата `Action<T>`, не имеющему возвращаемого значения, при этом вызов `return` начинает играть роль `yield break`.
+The lambda is converted to an `Action<Iterator.Yield<int>>` delegate, which has no return value. A `return` statement therefore takes the place of `yield break`.
 
-Стоит отметить, что делегат `yield`-параметра можно вызвать где угодно по коду, но смысл итератором будут возвращаться только значения, передаваемые под `await`-выражением. Можно было бы предусмотреть буфер и позволить итератору энергично наполнять его последовательными вызовами `yield`, а потом последовательно отдавать буфер при следующем вызове `await`.
+The delegate passed as `yield` can be called anywhere, but a value is yielded to the consumer only when the call is awaited. One possible extension would be to buffer values supplied by successive calls to `yield`, then drain that buffer at the next `await`.
 
-По производительности данный итератор лишь в *1.5-2 раза* медленнее обычного `yield return`, из-за дополнительных вызовов через делегаты и некоторого оверхэда на инфраструктуру `async`. К сожелению, требуется сборка *AsyncCtpLibrary.dll* из состава Async CTP, хотя возможно подменить её на свою, реализовав небольшой функционал.
+In my measurements, this iterator is *1.5–2 times* slower than an ordinary `yield return` iterator, due to the extra delegate calls and the overhead of the `async` infrastructure. It also requires *AsyncCtpLibrary.dll* from the Async CTP, although a small custom implementation could potentially replace that dependency.
 
-Ещё одно отличие `async`-методов от итераторов - возможность делать `await` внутри `try`-`catch` (это запрещено в итераторах):
+Another difference is that `await` is allowed inside the `try` block of a `try`/`catch` statement, where `yield return` is forbidden:
 
 ```c#
-async static void CatchIteratorImpl(Iterator.Yield<string> yield) {
-  try {
-    await yield("indise try");
+private static async void CatchIteratorImpl(Iterator.Yield<string> yield)
+{
+  try
+  {
+    await yield("inside try");
     throw new Exception();
-  } catch {
+  }
+  catch
+  {
     Console.WriteLine("=> catch");
-  } finally {
+  }
+  finally
+  {
     Console.WriteLine("=> finally");
   }
 }
 
-static void Main(string[] args) {
+private static void Main(string[] args)
+{
   Iterator
     .Of<string>(CatchIteratorImpl)
     .Materialize()
@@ -201,51 +228,60 @@ static void Main(string[] args) {
 }
 ```
 
-В примере я использую методы из [Reactive Extensions for .NET](http://msdn.microsoft.com/en-us/devlabs/ee794896) (`Run` - это просто `foreach` с телом из переданного делегата, `Materialize` позволяет увидеть момент завершения последовательности), получаем вывод:
+This example uses methods from [Reactive Extensions for .NET](https://learn.microsoft.com/en-us/previous-versions/dotnet/reactive-extensions/hh242985(v=vs.103)?redirectedfrom=MSDN). `Run` is essentially a `foreach` loop whose body is the supplied delegate; `Materialize` makes sequence completion visible in the output:
 
-    OnNext(indise try)
+    OnNext(inside try)
     => catch
     => finally
     OnCompleted()
 
-Это всё хорошо, а теперь о плохом - данная реализация не может корректно обрабатывать ситуации, когда пользователь итератора сам прекратит перебор и запросит у итератора `Dispose`. Если к данному моменту исполнение итератора C# было внутри `try-finally` (в итераторах C# они разрешены), то будет выполнен `finally`-блок, тогда как в случае наших итераторов из `async`-методов код `finally` выполнен не будет:
+There is a significant limitation: this implementation cannot correctly handle a consumer that stops enumeration early and calls `Dispose`. If an ordinary C# iterator is suspended inside a `try`/`finally` block, disposal executes the `finally` block. Our iterator built from an `async` method does not:
 
 ```c#
-var xs = Iterator.Of<int>(async yield => {
-  try {
+var xs = Iterator.Of<int>(async yield =>
+{
+  try
+  {
     await yield(1);
     await yield(2);
     await yield(3);
-  } finally {
+  }
+  finally
+  {
     Console.WriteLine("=> finally");
   }
 });
 
-xs.Take(2) // <== останавливаем перебор итератора
+xs.Take(2) // <== stop enumeration early
   .Materialize()
   .Run(Console.WriteLine);
 ```
 
-Вывод:
+Output:
 
     OnNext(1)
     OnNext(2)
     OnCompleted()
 
-В случае итераторов:
+Compare that with an ordinary iterator:
 
 ```c#
-static IEnumerable<int> YieldFinally() {
-  try {
+private static IEnumerable<int> YieldFinally()
+{
+  try
+  {
     yield return 1;
     yield return 2;
     yield return 3;
-  } finally {
+  }
+  finally
+  {
     Console.WriteLine("=> finally");
   }
 }
 
-static void Main(string[] args) {
+private static void Main(string[] args)
+{
   YieldFinally()
     .Take(2)
     .Materialize()
@@ -253,28 +289,31 @@ static void Main(string[] args) {
 }
 ```
 
-Получаем:
+Its output is:
 
     OnNext(1)
     OnNext(2)
     => finally
     OnCompleted()
 
-Ещё одна плохая новость в том, что исправить это вовсе не представляется возможным, так как компилятор C# из Async CTP просто не генерирует для `async`-методов необходимый код, рассчитанный на такое поведение (грубо говоря, нельзя за`Dispose`'ить асинхронный метод во время `await`'а). Можно защитить пользователя от таких ситуаций, бросая исключение, если `Dispose` вызывают до окончания перебора итератора (к сожалению, данный код не защищает от вызова `Dispose` итератом самому себе):
+There is no straightforward fix: the Async CTP compiler does not generate the code needed to support this behavior. In effect, there is no way to dispose of an `async` method while it is suspended at an `await`. We can at least detect early disposal and throw an exception, although this check does not guard against an iterator disposing of itself during execution:
 
 ```c#
-public void Dispose() {
+public void Dispose()
+{
   if (this.moveNext != null)
     throw new InvalidOperationException("Early disposing is not supported.");
 }
 ```
 
-Если в вашем итераторе нету `try-finally` или `using`, то реализация совсем ничем не отличается от обычного итератора C# 2.0. А так как `async`-методы в виде лямбда-выражений допускают вложенность, то можно издеваться над мозгом сколько угодно вложенными друг в друга итераторами:
+If the iterator contains no `try`/`finally` or `using` statements, this particular difference from ordinary C# 2.0 iterators disappears. Async lambdas can also be nested, so we can write nested anonymous iterators:
 
 ```c#
-Iterator.Of<int>(async yield => {
+Iterator.Of<int>(async yield =>
+{
   foreach (var x in
-    Iterator.Of<int>(async y => {
+    Iterator.Of<int>(async y =>
+    {
       await y(1);
       await y(2);
       await y(3);
@@ -287,4 +326,4 @@ Iterator.Of<int>(async yield => {
 .Run(Console.WriteLine);
 ```
 
-Таким образом, мы обнаружили очень большую схожесть между трансформациями `async`-методов из Async CTP и давно имеющимися в C# `yield return`-итераторами, что позволяет выражать одну фичу через другую. Естественно, данная реализация приведена только в ознакомительных целях и серъёзного применения не имеет (из-за описанных выше проблем с `finally`).
+The transformations used for Async CTP methods and C# iterators are similar enough that we can express one feature in terms of the other. This implementation is only an experiment, though: the limitations around `finally` make it unsuitable for general use.
