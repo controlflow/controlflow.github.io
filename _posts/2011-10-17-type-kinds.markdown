@@ -1,21 +1,21 @@
 ---
 layout: post
-title: "Совсем немного про type kinds"
+title: "A brief introduction to kinds"
 date: 2011-10-17 21:10:00
 author: Aleksandr Shvedov
 tags: haskell fprog types type theory kinds
 ---
-Сегодня мы поговорим о таких штуках, как kind’ы типов (иногда в русскоязычной литературе их называют “типажами”, но мне не особо нравится такой перевод).
+Today, let us look at *kinds*: the types of types.
 
-Начнём с самых азов. В любом языке (надеюсь на это) программирования есть понятие *значений*, например (все примеры кода в этом посте - Haskell):
+We will start with the basics. Programming languages have *values*, for example the following. All code examples in this post use Haskell:
 
 ```haskell
-1           -- число
-[1, 2, 3]   -- список
-(1, "abc")  -- кортеж
+1           -- a number
+[1, 2, 3]   -- a list
+(1, "abc")  -- a tuple
 ```
 
-В ~~расово верных~~ типизированных языках у этих значений есть типы:
+In a typed language, these values have types:
 
 ```haskell
 1           :: Int
@@ -23,25 +23,25 @@ tags: haskell fprog types type theory kinds
 (1, "abc")  :: (Int, String)
 ```
 
-Можно переписать эти типы иначе, не пользуясь синтаксическим сахаром для имён типов в Haskell:
+We can write these types more explicitly, using the descriptive names `List` and `Pair` in place of Haskell's built-in list and tuple syntax:
 
 ```haskell
-1           :: Int              -- в C-подобных языках:
+1           :: Int              -- in C-style languages:
 [1, 2, 3]   :: List Int         -- List<Int>
 (1, "abc")  :: Pair Int String  -- Pair<Int, String>
 ```
 
-Тут мы замечаем, что типы бывают совсем примитивными и сложными, синтезированными из *применений параметризованных типов* к различным другим типам. Такие параметризованные типы обычно встречаются в языках с поддержкой параметрического полиморфизма. Параметров-типов может быть несколько (например, в кортежах или словарях - `Map key value`). Такие полиморфные типы данных позволяют писать обобщённый код работы с экземплярами таких типов данных, не имеющий знания о реальных типах подставляемых в качестве типов-параметров - например, функция `map` работает поверх *списков* с элементами любого типа.
+Some types are simple, while others are built by *applying parameterized types* to other types. Parameterized types are common in languages that support parametric polymorphism. They can have several type parameters, as with tuples or maps: `Map key value`. These polymorphic data types let us write generic code without knowing the concrete types supplied as arguments. For example, `map` works with *lists* whose elements can have any type.
 
-После того, как к параметризованный тип *примененён* к типам-параметрам, параметризованный тип становится полноправным типом - точно таким же, как и примитивные (не параметризованные типы), и может выступать как тип-параметр других параметризованных типов.
+Once a parameterized type has been *applied* to all of its type arguments, the result is an ordinary type, just like a simple type with no parameters. It can in turn be used as an argument to another parameterized type.
 
-Возникает вопрос: что есть `List`, что есть `Pair` и другие параметризованные типы, до применения к типам-параметрам? Эти штуки называются *конструкторами типов* (*type constructors*), так как они очень похожи на конструкторам данных (декларации `data`). Именно поэтому я употреблял выше слово “применить”, так как применение конструктора типов к типу-параметру (`List Int`) выглядит аналогично применению к конструктору данных параметра-значения (`Just 1`). То есть `List`, например, можно трактовать как *функцию*, причём функцию *над типами*, которая *получает некоторый тип* (тип-параметр) и *возвращает некоторый тип* (параметризованный тип с подставленным типом-параметром).
+What, then, are `List`, `Pair`, and other parameterized types before they have been applied to arguments? They are *type constructors*, analogous to the data constructors introduced by `data` declarations. This is why I use the word “apply”: applying a type constructor to a type argument, as in `List Int`, resembles applying a data constructor to a value, as in `Just 1`. We can think of `List` as a *function over types*: it takes a type and returns a type.
 
-Если параметрический тип имет более одного типа-параметра, то конструктор такого типа можно трактовать как *функцию над типами с каррированными аргументами*. Например, конструктор типа `Map` при применении к одному типу-аргументу (тип ключа `Map`'а) на самом деле порождает в Haskell другой конструктор типа (!), применив который к другому типу-параметру (тип значений `Map`'а), мы получим нормальный тип. Именно поэтому в Haskell запись `Map Int String` аналогична `((Map Int) String)`. Более того, так же как и на уровне функций и значений, на уровне типов тоже можно исполльзовать частичное применение! Однако во многих других языках (типа C#, например), конструктор типа применяется сразу к нескольким типам-параметрам одновременно. Тогда такие конструкторы типов можно трактовать как функции, принимающие *кортеж из типов-параметров*.
+A type constructor with several parameters can be viewed as a *curried function over types*. In Haskell, applying `Map` to one type argument, the key type, produces another type constructor. Applying that result to the value type gives an ordinary type. This is why `Map Int String` means `((Map Int) String)`. Just as with functions and values, we can use partial application at the type level. In many other languages, such as C#, all type arguments must be supplied at once. We can think of those constructors as functions taking a *tuple of type arguments*.
 
-![]({{ site.baseurl }}/images/go-deeper.jpg)
+![We need to go deeper]({{ site.baseurl }}/images/go-deeper.jpg)
 
-Подведём небольшой итог: существуют несколько разновидностей типов - простые типы и функции над типами. Эти разновидности играют роль *типов типов*! Далее такой тип типа будет называться kind’ом. Введём обозначения для kind’ов - простые типы будем обозначать звёздочкой `*`, а функции над типами - привычной функциональной стрелочкой `→`. Теперь мы можем типизировать типы!
+We now have different categories of types: ordinary types and functions over types. These categories act as *types of types*, which we call *kinds*. We write `*` for the kind of an ordinary type and use the familiar function arrow `→` for type constructors. Now we can assign kinds to types:
 
 ```haskell
 Int           :: *
@@ -51,53 +51,53 @@ List          :: * → *
 Map           :: * → * → *
 ```
 
-Обратите внимание на то, что `→` здесь обладает правой ассоциативностью, поэтому последний kind можно записать вот так: `* → (* → *)`. То есть на самом деле всё просто, kind’ы - есть типы над элементами системы типов.
+The arrow `→` is right-associative, so the last kind can also be written as `* → (* → *)`. Kinds classify the entities in a type system, just as types classify values.
 
-Большинство времени, даже в Haskell, программисты имеют дело только с простыми типами, имеющими kind `*`. Однако уже очень давно в Haskell могут существовать типы-параметры (да, типы-параметры тоже имеют kind, так как сами, конечно же, являются типами), имеющие нетривиальные kind’ы, например:
+Most of the time, even in Haskell, programmers work with ordinary types of kind `*`. But Haskell has long supported type parameters with more interesting kinds. Type parameters have kinds too. For example:
 
 ```haskell
 fmap :: Functor f => (a → b) → f a → f b
 ```
 
-В этой сигнатуре к типу-параметру `f` применяются другие типы-параметры `a` и `b`, что заставляет компилятор Haskell для типа-параметра `f` вывести kind `* → *`. То есть вызывая `fmap` в качестве типа-параметра должен будет выступать некоторый параметризованный тип с одним типом-параметром (+ для которого определен экземпляр класса типов `Functor`). Таким образом функция `fmap` умеет отображать любой контейнер типа `f` в другой контейнер типа `f`, потенциально изменяя тип, которым параметризован монадический тип (например, отобразить `[Int]` в `[String]` или `Maybe Int` в `Maybe String`).
+In this signature, the type parameter `f` is applied to `a` and `b`, so the compiler infers that `f` has kind `* → *`. A call to `fmap` therefore needs a type constructor with one parameter and a corresponding `Functor` instance. The function can transform a value of type `f a` into one of type `f b`, potentially changing the element type: for example, from `[Int]` to `[String]`, or from `Maybe Int` to `Maybe String`.
 
-Языки, допускающие существование типов с kind’ом, отличным от `*`, называют языками с поддержкой *higher-kinded types*. Существует ещё одно понятие - *higher-kinded polymorphism* (его ещё называют полиморфизмом конструктора типов - *type constructor polymorphism*), подразумевающее под собой параметрически полиморфизм, при котором типы-параметры могут иметь kind, отличный от `*` (как тип-параметр `m` из примера выше). Помимо Haskell, известным языком с поддержкой полиморфизма конструктора типов является Scala (что совсем не удивительно).
+Types whose kinds differ from `*` are known as *higher-kinded types*. A related concept is *higher-kinded polymorphism*, also called *type constructor polymorphism*: parametric polymorphism in which type parameters can have kinds other than `*`, like `f` above. Besides Haskell, Scala is another well-known language that supports it.
 
-В большинстве мэйнстримных языков типа C#/Java так или иначе существует возможность использовать/определять типы с kind’ами, отличными от `*`. Например, такие типы в .NET даже имеют представление во время выполнения - `typeof(Dictionary<,>)`. Однако, они не являются первоклассными сущностями в системе типов - нельзя передать такие типы в качестве типов-параметров, не указывая им собственных типов-параметров. А значит нет и поддержки higher-kinded polymorphism - абсолютно все типы-параметры всегда обладают kind’ом `*`, нельзя применить тип к типу-параметру как-то так: `T<int>`.
+Mainstream languages such as C# and Java also let us define and use type constructors whose kinds are not simply `*`. In .NET, these even have a runtime representation: `typeof(Dictionary<,>)`. However, they are not first-class entities in the type system: we cannot pass them as type arguments without first supplying their own arguments. There is therefore no higher-kinded polymorphism. Every type parameter has kind `*`; we cannot apply a type parameter as a constructor, as in `T<int>`.
 
-Существуют множество других нетривиальных случаев типов, обладающих необычными kind’ами, например в этом определении типа данных:
+There are more interesting combinations of kinds. Consider this data type declaration:
 
 ```haskell
 data Foo m a = Foo (m a)
 ```
 
-Тип-параметр `m` будет иметь kind `* → *` (так как к нему применяется тип-параметр `a`), а вот уже сам тип `Foo` будет иметь kind `(* → *``) ``→ *``→ ``*`. То есть после применения конструктора типа `Foo` к другому конструктору типа с kind’ом `* → *` и последующему применению к ещё одному обычному типу, мы получим обычный тип с kind’ом `*`, такой как, например, `Foo List Int` (важно понимать приоритет применений конструкторов типов к типам-параметрам - `(Foo List) Int`).
+The parameter `m` has kind `* → *` because it is applied to `a`. The constructor `Foo` itself has kind `(* → *) → * → *`. Applying `Foo` to a constructor of kind `* → *`, then to an ordinary type, produces a type of kind `*`, such as `Foo List Int`. Notice how type application groups: this means `(Foo List) Int`.
 
-Интересно, что Haskell по-умолчанию не даёт возможности указывать kind’ы типов явно (так же как указывать значениям типы), а выводит kind из использования. Из-за этого людям иногда приходится изгаляться, например, добавляя фиктивные конструкторы типа:
+Standard Haskell infers kinds from usage rather than allowing explicit kind annotations in the same way as type annotations for values. This sometimes leads to awkward workarounds, such as adding a dummy data constructor:
 
 ```haskell
 data Set cxt a = Set [a]
                | Unused (cxt a → ())
 ```
 
-В декларации выше конструктор `Unused` используется лишь для того, чтобы задать типу-параметру kind `* → *`, что выглядит чрезвычайно ущербно. Однако в GHC существует языковое расширение *explicitly-kinded quantification*, включаемое флагом `-XKindSignatures`, которое добавляет поддержку явных аннотаций kind’ов, что может быть очень и очень удобно:
+Here, `Unused` exists solely to force `cxt` to have kind `* → *`, which is a rather clumsy solution. GHC provides an extension called *explicitly-kinded quantification*, enabled with `-XKindSignatures`, that allows explicit kind annotations:
 
 ```haskell
--- в декларациях типов данных
+-- in data type declarations
 data Set (cxt :: * → *) a = Set [a]
 
--- в определениях синонимов типов
+-- in type synonym declarations
 type T (f :: * → *) = f Int
 
--- в определениях классов типов
+-- in type class declarations
 class (Eq a) => C (f :: * → *) a where ...
 ```
 
-Мне лень и не хватает знаний Haskell и теории типов чтобы достойно осветить тему kind’ов глубже, поэтому я просто оставлю здесь несколько интересных ссылочек:
+A deeper treatment would take me beyond my knowledge of Haskell and type theory, so I will leave you with a few references:
 
-* [Расширение *constraint kinds* для GHC](http://blog.omega-prime.co.uk/?p=127) - добавляет новую разновидность kind’ов - `Contstraint`, что позволяет параметризовать ограничения на типы-параметры полиморфных типов и функций (параметризовать constraints).
-* В системах kind’ов [может встречаться](http://hackage.haskell.org/trac/ghc/wiki/IntermediateTypes) и такие типы kind’ов, как распакованные типы (обычно обозначаются символом `#`). Более того, между kind’ами может существовать отношение, аналогичное вложению/включению типов - subkinding.
-* [KindSystem](http://hackage.haskell.org/trac/ghc/wiki/KindSystem) и [PolymorphicKinds](http://hackage.haskell.org/trac/ghc/wiki/PolymorphicKinds) для GHC - предлагаемые расширения языка, позволяющие добавить аналог параметрического полиморфизма на уровень kind’ов (!) и определять собственные kind’ы (!!). Самый известный пример всего этого безобразия - списки, параметризованные собственной длинной:
+* The [*constraint kinds* extension for GHC](http://blog.omega-prime.co.uk/?p=127) introduces the kind `Constraint`, allowing constraints on polymorphic types and functions to be parameterized.
+* A kind system [may also distinguish unboxed types](http://hackage.haskell.org/trac/ghc/wiki/IntermediateTypes), traditionally assigned the kind `#`. Kinds can also have a relationship analogous to subtyping, called *subkinding*.
+* [KindSystem](http://hackage.haskell.org/trac/ghc/wiki/KindSystem) and [PolymorphicKinds](http://hackage.haskell.org/trac/ghc/wiki/PolymorphicKinds) describe proposed GHC extensions that bring parametric polymorphism to the kind level and allow user-defined kinds. A familiar example is a list indexed by its length, expressed using the proposed syntax:
 
 ```haskell
 data kind Nat = Zero | Succ Nat
@@ -107,4 +107,4 @@ data List :: * -> Nat -> * where
   Cons :: a -> List a n -> List a (Succ n)
 ```
 
-Тип `List` невозможно сконструировать, не используя для второго типа-параметра тип, не соответствующий kind’у `Nat`. который включает в себя тип `Zero` и тип `Suсс`, параметризованный типом, обладающим kind’ом `Nat`. Всё это очень похоже на работу со значениями, только ровно одним уровнем выше. Без определения kind’а `Nat` можно было бы создать не имеющий особого смысла тип `List Int Int`.
+The second argument to `List` must have kind `Nat`. This kind includes `Zero` and the constructor `Succ`, which takes an argument of kind `Nat`. It resembles programming with values, but one level higher. Without a distinct `Nat` kind, it would be possible to construct a meaningless type such as `List Int Int`.

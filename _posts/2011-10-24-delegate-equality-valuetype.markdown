@@ -1,22 +1,26 @@
 ---
 layout: post
-title: "Delegate equality и методы типов-значений"
+title: "Delegate equality: methods on value types (part 2)"
 date: 2011-10-24 16:12:54
 author: Aleksandr Shvedov
 tags: csharp clr .net delegate valuetype
 ---
-Видели [предыдущий пост]({{ site.baseurl }}/2011/10/24/delegate-equality-valuetype.html)? Как вам такое продолжение истории:
+After the [previous post]({{ site.baseurl }}/2011/10/24/delegate-equality-base.html), here is another example:
 
 ```c#
 using System;
 
-struct Foo {
+struct Foo
+{
   public void M() { Console.Write("uups!"); }
 }
 
-class Bar {
-  static event Action E = delegate { };
-  static void Main() {
+class Bar
+{
+  private static event Action E = delegate { };
+
+  private static void Main()
+  {
     var foo = new Foo();
 
     E += foo.M;
@@ -28,8 +32,10 @@ class Bar {
 
 ```
 
-Отписки снова не происходит! Более того, снаружи такого события отписку такого метода произвести *невозможно*.
+Once again, the handler stays subscribed. Recreating a delegate from `foo.M` cannot remove it.
 
-Дело тут в определении типа `Foo`, являющегося *типом-значением*, и скрытом *боксинге*, происходящем при подписке *и* отписке. Для того, чтобы сделать делегат из метода уровня экземпляра, определённого для типа-значения, надо как-то в делегат сохранить это экземпляр значения (так же, как туда сохраняется `this` при создании делегатов из методов уровня экземпляра, определённых в классах). Это нельзя сделать никак иначе, кроме как вызвав боксинг значения и “прикрепив” бокс к делегату, так как время жизни делегата часто неопределено и он должен создаваться на куче.
+The cause is that `Foo` is a *value type*, and implicit *boxing* occurs both when subscribing *and* when attempting to unsubscribe. A delegate created from an instance method on a value type needs to retain its target, just as a delegate for a method on a class retains a reference to `this`. The delegate needs an object reference for that target, so the value is boxed. The delegate then keeps the boxed copy alive for as long as it is needed.
 
-Тогда что происходит при отписке? Всё очень просто - создаётся *ещё один* бокс значения. И тут становится понятно, что невозможно выяснить, что два бокса были сделаны из одного и того же значения. Реализация `Delegate.Equals` не должна и не полагается на типы-значения, определяющие свои понятия эквивалентности (переопределяющие `Equals`/реализующие `IEquatable<T>`), а руководствоваться понятием ссылочной эквивалентности, которого не прослеживается между двумя разными боксами одного значения. Именно поэтому, не смотря на равенство методов, подписанный на событие делегат не равен делегату, с помощью которого происходит попытка отписки. Делегатов, равных сходному просто не может больше существовать!
+What happens when we try to unsubscribe? The value is boxed *again*. The two boxes are separate objects; neither carries any identity linking it to the original variable. `Delegate.Equals` compares these targets by reference. It does not use the value type's own equality rules, whether defined by an override of `Equals` or an implementation of `IEquatable<T>`. The methods match, but the target objects do not, so the delegate passed to `-=` is not equal to the subscribed delegate. Repeatedly converting `foo.M` to a delegate only creates more boxes.
+
+To unsubscribe successfully, retain the delegate created when subscribing and pass that same instance to `-=`.

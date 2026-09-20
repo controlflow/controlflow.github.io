@@ -5,6 +5,6 @@ date: 2011-10-13 17:02:00
 author: Aleksandr Shvedov
 tags: values types kinds sorts
 ---
-Просто положу это сюда.
+A diagram of values, types, kinds, and sorts, for reference.
 
-![]({{ site.baseurl }}/images/values-types-kinds-sorts.png)
+![The hierarchy of values, types, kinds, and sorts]({{ site.baseurl }}/images/values-types-kinds-sorts.png)

@@ -1,88 +1,98 @@
 ---
 layout: post
-title: "Немного заметок про C# async"
+title: "A few notes on C# async"
 date: 2013-02-03 21:26:00
 author: Aleksandr Shvedov
 tags: csharp async resharper
 ---
-Попробовал тут активно использовать C# 5.0 `async`/`await` в pet-проекте (если его можно так назвать), заодно протестировать поддержку `async`/`await` в нашем продукте (гадкий feature intersection всегда создаёт пространство для багов). В качестве испытуемого выступал старый добрый ADO.NET, публичный API которого в .NET 4.5 просто вдоль и поперёк усеян `async`-версиями различных методов. Это был интересный опыт, поэтому спешу поделиться результатами:
+I recently started using C# 5.0's `async`/`await` extensively in a side project, while also testing our product's support for the feature. Interactions between language features always provide plenty of opportunities for bugs. My test case was ADO.NET, whose public API in .NET 4.5 is full of asynchronous versions of existing methods. It was an interesting experience, so here are my observations:
 
-* Наконец-то асинхронный код выглядит практически так же прямолинейно, как и синхронный. Наконец-то асинхронные API выглядят практически так, как должны были выглядеть с начала времён, без всякого булшита типа `BeginSmth()`/`EndSmth()`/`IAsyncResult`, без вывернутого наизнанку кода event-based async pattern (ещё и с CLR-событиями, которые с большим трудом подвергаются хоть какой-нибудь композиции).
+* At last, asynchronous code looks almost as straightforward as synchronous code. Asynchronous APIs finally look the way they should have from the beginning, without the machinery of `BeginSmth()`/`EndSmth()`/`IAsyncResult`, or the inverted control flow of the event-based asynchronous pattern, complete with CLR events that are difficult to compose.
 
-Единственный вопрос, который меня беспокоит - как асинхронный код должен сосуществовать со всем остальным codebase’ом. Ведь с монадами/комонадами иногда возникают проблемы на месте стыков в остальным миром или другими монадами - асинхронную операцию где-нибудь может потребоваться дождаться синхронно (что убивает всю суть `async`), а из монады `IO` вообще нельзя выбраться по-честному. В некоторых, асинхронных по своей природе, частях приложений - UI-событиях, например - проблем быть не должно, так часто всё сработает по принципу *fire and forget*, никому не нужно дожидаться `Task`'ов. В противном случае оборачивание всего в `Task<T>` начинает расползаться по типам возвращаемых значений, например, распространяясь на методы, в которых никаких длительных операций и нет, но им доводится обращаться другими методами, уже обернутыми в `Task<T>` по той или иной причине.
+  What still concerns me is how asynchronous code should coexist with the rest of the codebase. Monads and comonads can be awkward at their boundaries with ordinary code or other monads: somewhere, an asynchronous operation may need to be waited on synchronously, defeating the purpose of `async`, while there is no honest escape from the `IO` monad at all. In parts of an application that are naturally asynchronous, such as UI event handlers, this is often less of a problem: they can work on a *fire-and-forget* basis, with no caller needing to await the resulting tasks. Elsewhere, `Task<T>` starts spreading through return types, including methods that do no lengthy work themselves but call other methods already returning `Task<T>`.
 
-* Как только становится нужен механизм отмены асинхронных операций, код начинает обрастать лапшой из-за повсеместной явной передачи/хранения `CancellationToken`‘ов. Из-за этого страдают и дизайнеры API, вынужденные предоставлять перегрузки методов с токеном отмены и без. На фоне этого явно выигрывает тип `Async<T>` из F# async, который можно с некоторым приближением считать аналогом `Task<T>`, содержащим внутри себя `CancellationToken`. Любое асинхронное вычисление может “вытащить” токен из `Async<T>` и без проблем подписать свой код на событие запроса отмены, совершенно незаметно для пользователя. Можно просто начать пользоваться cancellation’ом когда это понадобится и не заботиться что токен протащен между всеми операциями.
+* As soon as cancellation is needed, explicitly passing and storing `CancellationToken` values everywhere starts to clutter the code. API designers also have to provide overloads with and without a token. F#'s `Async<T>` has a clear advantage here. For this purpose, a rough analogy is a task with an implicitly propagated cancellation token. An asynchronous computation can retrieve the current token and register code to run when cancellation is requested, without changing the caller's code. You can start using cancellation when you need it, without first making sure a token has been threaded through every operation.
 
-Но самая главная проблема - используя C# async забыть передать токен очень легко, что я успешно и допустил много раз. Самое обидное, что забытым в одном из нескольких мест токеном отмены ты ничего не ломаешь, ну остановится метод чуть позже, не велика беда. Обнаружить продолбанные токены крайне сложно, если только постоянно не тестируешь отмену. В моей задаче некоторый код должен был исполняться в бесконечном цикле периодически опрашивая web-сервисы, поэтому cancellation я использовал постоянно чтобы загасить приложение и только это позволило быстро локализовать пропущенные токены. В первом черновике этого поста тут было предложение “Кстати, отлов таких пропущенных передач `CancellationToken`'ов - неплохая задача для ide tool.”, но я писал пост так долго, что успел реализовать такую фичу в нашем продукте, выглядит очень приятно:
+  The biggest problem is how easy it is to forget to pass the token in C# async code. I managed to do this repeatedly. Missing a token at one of several call sites often causes no obvious failure: the method just stops a little later. These omissions are difficult to find unless cancellation is tested regularly. My code ran in an infinite loop, polling web services, so I used cancellation every time I shut down the application. That was what helped me find the missing tokens quickly.
 
-![]({{ site.baseurl }}/images/async-cancellation-token.png)
+  The first draft of this post contained the sentence “Detecting omitted `CancellationToken` arguments would be a useful feature for an IDE tool.” Writing the post took long enough that I had time to implement it in our product:
 
-* Плохо когда в языке можно писать конструкции, которые не имеют особого смысла - если так можно написать, то кто-нибудь (на самом деле дофига кто) обязательно так и напишет. Выражения с `await`'ами на хвостовых позициях, например, бесполезны и создают лишние “пустые” колбэки:
+  ![IDE inspection pointing out an overload with cancellation support]({{ site.baseurl }}/images/async-cancellation-token.png)
 
-```c#
-async Task CannotBeInCancelledState(CancellationToken token) {
-  await Task.Run(
-    cancellationToken: token,
-    action: async () => { await smth; });
-}
-```
+* When a language allows constructs that serve little purpose, people will inevitably use them. In simple forwarding cases, for example, an `await` in tail position can be redundant, adding an otherwise empty continuation:
 
-Это тоже неплохая задачка для ide tools, тем более не так давно я написал детектор хвостовых позиций в C#. Удивительно, но такие хвостовые `await`'ы регулярно встречаются в коде, который мне попадается на глаза в блогпостах или сообщениях от знакомых, да и сам пару раз такие бестолковые `await`'ы написал.
-
-* Если вы разрабатываете асинхронную апишечку с поддержкой cancellation’а, то подумайте о том, какое поведение может ожидать вызывающая сторона в случае запроса отмены. Относящаяся к SQL Server часть ADO.NET, например, иногда не парится и бросает `SqlException` в случае отмены асинхронных операций (когда именно - я так не смог понять, возможно, на ранних этапах отправления sql-запроса на сервер) и `Task`'а переходит в состояние `Faulted`. В другие моменты внутри бросается таки концептуально правильный `OperationCancelledExeception`, который предназначен для того чтобы пронести `CancellationToken` (который остановил операцию) по стеку вверх пока исключение не перехватит `Task`'а, привязанная к этому токену, и не переведёт себя в состояние `Cancelled`. Это оно так должно работать, но не в ADO.NET (я осознанно не закрываю ресурсы, это пример):
-
-```c#
-var source = new CancellationTokenSource();
-var connection = new SqlConnection(connectionString);
-await connection.OpenAsync(source.Token);
-
-// создаём команду с тяжёлым запросом и запускаем её асинхронно
-var command = new SqlCommand("select count(*) from [?]", connection);
-var task = command.ExecuteScalarAsync(source.Token);
-
-Thread.Sleep(100); // немного ждём
-source.Cancel();   // и гасим токен
-
-await task.ContinueWith(t => {
-  Console.WriteLine("Status: {0}", t.Status);
-  try {
-    Console.WriteLine("Result: {0}", t.Result);
+  ```c#
+  private async Task CannotBeInCancelledState(CancellationToken token)
+  {
+    await Task.Run(
+      cancellationToken: token,
+      action: async () => { await smth; });
   }
-  catch (AggregateException exc) {
-    var cancelled =
-      exc.InnerExceptions.OfType<OperationCanceledException>().First();
+  ```
 
-    Console.WriteLine("== source.Token? {0}",
-      cancelled.CancellationToken == source.Token);
-    Console.WriteLine("== CancellationToken.None? {0}",
-      cancelled.CancellationToken == CancellationToken.None);
-  }
-});
-```
+  This is another useful inspection for an IDE tool, especially since I recently wrote a detector for tail positions in C#. I keep seeing these redundant tail-position `await` expressions in blog posts and code from colleagues, and I have written a few myself.
 
-Как вы можете догадываться, результатом будет:
+* If you are designing an asynchronous API with cancellation support, think about what callers should expect when cancellation is requested. The SQL Server part of ADO.NET sometimes throws `SqlException` when an asynchronous operation is canceled, leaving the task in the `Faulted` state. I could not pin down exactly when this happens; perhaps it is during the early stages of sending a SQL query to the server.
 
-```
-Cancelled
- == source.Token? False
- == CancellationToken.None? True
-```
-Старайтесь сохранить оригинальный токен, это может положительно сказаться на нервных клетках потребителей вашего API, решивших проверять токены отмены идентичность.
+  At other times, it throws the conceptually appropriate `OperationCanceledException`. This exception can carry the `CancellationToken` that caused the operation to stop up the stack, allowing the task associated with that token to recognize cancellation and transition to `Canceled`. That is how I would expect it to work, but ADO.NET does not always preserve the token. Consider this example; resources are deliberately left undisposed to keep it focused:
 
-* Я совершенно не понимаю когда ожидать от async-метода или TPL-апишечки `AggregateException`, а когда - нет, и должен ли я по этому поводу вообще париться. В моей задаче любое исключение просто журналируется и задача стартует заново через некоторое время, поэтому я не задавался глубоко этим вопросом. В Сети достаточно материала тематики исключений в асинхронном коде, но хочется знать чего ожидать без заглядывания в гугл.
+  ```c#
+  var source = new CancellationTokenSource();
+  var connection = new SqlConnection(connectionString);
+  await connection.OpenAsync(source.Token);
 
-* Очень хорошо, что сделали асинхронные лямбда-выражения и асинхронные анонимные делегаты, без них пришлось бы очень туго. Плохо, что теперь в языке есть противоречие - асинхронный код может быть анонимным, а код итераторов - только в методах. Можно было бы ввести модификатор `iterator` (как в последнем VB.NET) и тем самым разрешить анонимные итераторы (тогда бы возникло другое противоречие - итераторы-методы можно было бы не аннотировать `iterator` из соображений обратной совместимости, а лямбды было бы необходимо аннотировать). Видимо, анонимные итераторы не сделали чтобы не нарушать заявление Эрика Липперта, что анонимные методы и итераторы - это два сложных преобразования и незачем их разрешать смешивать вместе (`async`-преобразование, видимо, проще LOL).
+  // create a command with an expensive query and execute it asynchronously
+  var command = new SqlCommand("select count(*) from [?]", connection);
+  var task = command.ExecuteScalarAsync(source.Token);
 
-* Ради Вселенной, не используете `async`-методы, возвращающие `void`, даже если абсолютно уверены, что никто не будет заинтересован в отслеживании окончания асинхронной операции. Такие методы разрешили в первую очередь из соображений обратной совместимости, чтобы асинхронные лямбды (думаю, что в первую очередь именно лямбды) можно было приводить к куче существующий типов делегатов вида `EventHandler`/`Action` без возвращаемых значений типа `Task`. Если же вы пишете async-метод и планируете его передавать в качестве таких типов-делегатов без `Task`, то лучше создать `void`-перегрузку. Ходят слухи, что перед выпуском релиза .NET 4.5 было много разговоров насчёт вырезания `async` `void` методов из финального дизайна, но не сложилось.
+  Thread.Sleep(100); // wait briefly
+  source.Cancel();   // request cancellation
 
-Ещё один нюанс - из-за существования `async` `void` методов легко ошибиться при модульном тестировании `async`-кода, так как без возвращаемого типа `Task` ни один unit test фреймворк не может точно узнать, закончилось-ли на самом деле исполнение теста, и что совсем плохо - будет радостно сигналить пользователю зелёным тестом после первого `await`'а (тоже отличная задача для ide tool, запланирована на следующую версию нашего продукта).
+  await task.ContinueWith(t =>
+  {
+    Console.WriteLine("Status: {0}", t.Status);
+    try
+    {
+      Console.WriteLine("Result: {0}", t.Result);
+    }
+    catch (AggregateException exc)
+    {
+      var cancelled =
+        exc.InnerExceptions.OfType<OperationCanceledException>().First();
 
-* Когда смотришь на цикл `while (await reader.ReadAsync())`, то невольно задумываешься сколько поимеешь оверхеда от такой гранулярности `await`-per-итерация-цикла. Прелесть C# `async` в том, что на самом деле код всего `async`-метода может выполниться вовсе синхронно, на усмотрение того или иного API. Причём, в случае полностью синхронного исполнения, `async`-метод вообще никогда не будет превращаться в замыкание и выделять под себя память в куче, что просто замечательно (для замыкания `async`-метода генерируется value-тип, который боксится при необходимости - первом `await`'е, который откажется выполниться синхронно). Это особо актуально системного API (WinRT) метро-составляющей Windows 8, в котором вообще все потенциально длительные операции сделаны асинхронными и совершенно не имеют обычных синхронных аналогов. Синхронность `await`'ов позволяет иногда сводить отличие асинхронных методов от синхронных в плане производительности до пары-тройки выделений памяти на куче.
+      Console.WriteLine("== source.Token? {0}",
+        cancelled.CancellationToken == source.Token);
+      Console.WriteLine("== CancellationToken.None? {0}",
+        cancelled.CancellationToken == CancellationToken.None);
+    }
+  });
+  ```
 
-Однако есть и обратная сторона медали - в отличие от `yield return` итераторов, не всё тело `async`-метода является отложенным, а код как минимум до первого `await`'а исполняется синхронно. Как вы можете догадываться, с описанной выше оптимизацией, становится практически непредсказуемым сколько длится синхронная составляющая исполнения `async`-метода, что может быть важно, когда вы вызываете `async`-метод без `await`'а чтобы форкнуть исполнение, дожидаясь результата позже. Это лечится `await Task.Yield();` в коде `async`-метода или оборачиванием в `Task.Run()` на стороне вызова. Однако опять же есть преимущества - например, нет проблем с отложенностью проверки входных аргументов как у итераторов.
+  The result is:
 
-Ещё одна приятная фича кодогенератора `async`-методов заключается в том, что по мере исполнения `async`-метода не требуемые более поля структуры-замыкания ссылочных типов заполняются ссылочным `null`. Это устраняет проблему, присутствующую в итераторах C# - итератор держит в замыкании все локальные переменные, даже если находится в таком состоянии, при котором обращений к тем или иным локальным переменным больше не могут произойти. Более того, итераторы всегда хранят в замыкании оригинальные значения параметров - они могут понадобиться, если итератору сделают второй раз `GetEnumerator()`. Таким образом, `async`-методы лишены проблемы удержания от сборки мусора своих локальных переменных (насколько я понял, компилятор C# не генерирует присвоений `null` при сборке с выключенными оптимизациями чтобы можно было отлаживаться).
+  ```
+  Status: Canceled
+  == source.Token? False
+  == CancellationToken.None? True
+  ```
+  Preserve the original token. Callers who compare cancellation tokens for equality will appreciate it.
 
-* Так же как C# 4.0 `dynamic`, вся `async`-трансформация крепко прибита гвоздями (сотками, не меньше) к кучке типов из фреймворка, особенно `System.Threading.Task`. Мы собираем наш продукт компилятором C# 5.0, но не можем пользоваться `async` из-за того, что продукт должен работать под .NET 3.5 (из-за поддержки VS вплоть до версии 2005 года) + у нас свой мудрёный подход к тредингу (свои пулы, диспатчеры и прочее). Хотелось бы видеть в языке гораздо менее завязанные на фреймворк фичи.
+* I still find it unclear when an async method or a TPL API will expose an `AggregateException`, when it will not, and how much I need to worry about the distinction. In my project, any exception is simply logged and the operation restarted after a delay, so I have not investigated deeply. There is plenty of material online about exceptions in asynchronous code, but I would like to know what to expect without having to look it up.
 
-* Мой солюшен насчитывает всего лишь несколько тысяч строк, поэтому я не испытывал проблем с отладкой `async`-лапши, но знакомые, использующие `async` в больших проектах часто жалуются на потерю stack trace’а, не могут понять откуда пришли к тому или иному асинхронному вызову. Проблема концептуальная, но мне кажется что её можно было решить (научиться мгновенно собирать stack trace перед `await`'ами, хотя бы в debug?). В остальном функциональность VS радует, всё дебажится без проблем (только step into иногда прыгает как сумасшедший по `await`'ам).
+* Asynchronous lambdas and anonymous methods are very welcome; working without them would be painful. They do introduce an inconsistency, though: asynchronous code can be anonymous, while iterator code can only appear in methods. An `iterator` modifier, like the one in the latest VB.NET, could make anonymous iterators possible. That would introduce another inconsistency: existing iterator methods could omit the modifier for compatibility, while lambdas would need it. Eric Lippert has argued that anonymous methods and iterators are both complex transformations, making their combination difficult to justify. Given that lambdas can now be combined with the async transformation, I find that argument less convincing.
+
+* Avoid `async` methods that return `void`, even if you are sure nobody will care when the operation finishes. They exist primarily for compatibility with existing delegate types such as `EventHandler` and `Action`, which do not return `Task`. I suspect asynchronous lambdas were especially important here. If an async operation needs to be exposed through one of these delegate types, I would prefer a task-returning implementation with a separate `void` adapter. I have heard that there was considerable discussion about removing `async void` from the design before .NET 4.5 shipped, but it remained.
+
+  There is also a testing trap: without a returned `Task`, a test framework may not know whether an asynchronous test has actually finished. Worse, it may report success as soon as the method returns at its first suspending `await`. Detecting this is another useful IDE inspection, planned for the next version of our product.
+
+* Looking at a loop such as `while (await reader.ReadAsync())`, it is natural to wonder about the overhead of an `await` on every iteration. A useful property of C# async is that, depending on the API, an entire async method can complete synchronously. In that case, its state machine does not need to be moved onto the heap. The compiler generates a value type for the state machine, which is boxed when necessary: at the first `await` that actually suspends execution.
+
+  This is particularly relevant to the WinRT APIs used by the Metro side of Windows 8, where potentially lengthy operations are asynchronous and have no ordinary synchronous equivalents. When awaited operations complete synchronously, the performance difference can sometimes come down to just a few heap allocations.
+
+  There is a trade-off. Unlike a `yield return` iterator, an async method is not entirely deferred: it starts executing synchronously and continues until an `await` actually suspends it. With the optimization described above, it can be hard to predict how long this synchronous portion will take. That matters when you call an async method without immediately awaiting it, intending to start work and await the result later. You can introduce an asynchronous boundary with `await Task.Yield();` inside the method, or use `Task.Run()` at the call site. Immediate execution also has benefits: argument-validation code can run straight away, rather than being deferred as it is in an iterator, although exceptions from a task-returning async method are still recorded in that task.
+
+  Another useful detail of async code generation is that reference fields in the state machine are cleared to `null` when they are no longer needed. This avoids a retention problem found in C# iterators: an iterator can keep references to locals even after reaching a state where those locals can never be used again. Enumerable iterators also retain the original parameter values in case `GetEnumerator()` is called again. Clearing dead references in async state machines lets the referenced objects be collected sooner. As far as I understand, the compiler omits these assignments to `null` when optimizations are disabled, so that the values remain available to the debugger.
+
+* Like C# 4.0's `dynamic`, the async transformation is tightly tied to a small set of framework types, particularly `System.Threading.Tasks.Task`. We build our product with the C# 5.0 compiler, but cannot use async because it must run on .NET 3.5: we support Visual Studio versions going back to 2005. We also have our own threading infrastructure, including thread pools and dispatchers. I would like language features to depend less heavily on specific framework types.
+
+* My solution is only a few thousand lines long, so debugging async code has not been a problem for me. Colleagues using it in larger projects, however, often complain about losing stack traces and being unable to tell how execution reached a particular asynchronous call. This is a conceptual problem, but I think it ought to be solvable. Could stack traces be captured efficiently before each `await`, at least in debug builds? Otherwise, the Visual Studio debugging experience has been good, apart from stepping into code occasionally jumping around unpredictably at `await` expressions.

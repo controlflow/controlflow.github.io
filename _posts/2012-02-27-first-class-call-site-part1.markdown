@@ -1,35 +1,41 @@
 ---
 layout: post
-title: "First-class call site - part1: размышления"
+title: "First-class call sites?"
 date: 2012-02-27 12:05:00
 author: Aleksandr Shvedov
 tags: csharp callsite dynamic caching
 ---
-Пойдём издалека. Несколько дней назад, ковыряя забытый всеми C# 4.0 dynamic, задумался над такой штукой - что можно было бы делать, если бы язык предоставлял функциям доступ (при их желании) *к некоторой реификации (материализованном представлении в виде значения) факта вызова этих функций в клиентском коде*. То есть чтобы некоторая магическая функция `F()` могла уметь отличать факты вызова себя из разных мест клиентского кода. На первый взгляд это кажется совершенно дурной затеей - кто потом будет отлаживать функцию, поведение которой может отличаться при вызове из разных участков клиентского кода?
+Let me start with the background. A few days ago, while revisiting C# 4.0's `dynamic`, I wondered what we could do if a language let a function access *a reified representation of its call site*: a value identifying the location in the calling code. A function `F()` could then distinguish calls from different places. At first, this sounds like a terrible idea. Who wants to debug a function whose behavior can change depending on where it is called?
 
-Однако, есть одна достаточно узкая область, где это может приносить некоторые плюшки - *кэширование*. В проекте, над которым я работаю, кэширование составляет очень важную составляющую продукта и код им обильно усыпан. Я заметил, что достаточно часто обращения к кэшу могут иметь либо параметры, лежащие в каких-то определённых рамках, специфичных конкретно этому факту обращения к кэшу, либо вообще константные параметры:
+There is, however, one fairly narrow area where this could be useful: *caching*. Caching is essential to the product I work on, and it appears throughout the code. I have noticed that many cache lookups use arguments that either fall within a range specific to that call site or are simply constant:
 
 ```c#
-public IDeclaredType ResourceKey {
+public IDeclaredType ResourceKey
+{
   get { return GetType("System.Windows.ResourceKey"); }
 }
 
-public IDeclaredType EventSetter {
+public IDeclaredType EventSetter
+{
   get { return GetType("System.Windows.EventSetter"); }
 }
 
-public IDeclaredType Trigger {
+public IDeclaredType Trigger
+{
   get { return GetType("System.Windows.Trigger"); }
 }
 ```
 
-Функция `GetType()` тут осуществляет поиск в словаре по ключу - полному имени типа - и производит поиск типа по сборкам в случае промаха. Функцию `GetType()` можно считать чистой функцией в рамках промежутка между инвалидацией всего кэша. Понятно, что поиск в кэше-словаре фактически не особо и нужны - в каждом случае использования `GetType()` можно кэшировать результат в инвидиадуальном поле и таким образом превратить поиск по словарю в единственный `if`. Проблема в том, что в моём коде сейчас 121 такой вызов и в 90% случаев параметры контантны - создавать поле и явно проверять его (ещё и под `lock`'ом) на каждый usage уж совсем не хочется и не разумно. При этом инвалидируется весь кэш, мягко говоря, достаточно часто (практически на каждое нажатие пользоваталем клавиши (!) вне тел методов, так как любое такое нажатие может привести к появлению новых/исчезновению старых типов. Даже при такой частоте инвалидации, доля попаданий этого кэша составляет 99.993%, так что он всё равно очень клёвый) и превращать процедуру инвалидации в зануление тьмы полей просто неприемлимо.
+Here, `GetType()` looks up the fully qualified type name in a dictionary and searches the assemblies if the lookup misses. Between invalidations of the entire cache, we can treat `GetType()` as effectively pure. For these constant-argument calls, the dictionary lookup is not really necessary: each call site could cache its result in a separate field, reducing the lookup to a single `if`.
 
-Так вот, имея возможность получать на стороне функции `GetType()` некоторый объект, характеризующий конкретный факт её вызова, можно было бы построить гораздо *более гранулярный кэш*. Такие техники уже применяются в том же C#, но об этом речь пойдёт чуть позже. Давайте попробуем представить код на языке с расширением, который я бы назвал *first-class call site* (то есть “вызывающая сторона, являющаяся значение”), упрощающим использование подобных техник для написания всеми любимых функций вычисления факториалов:
+The problem is that my code currently contains 121 such calls, with constant arguments in 90% of cases. Adding a field and an explicit check, under a `lock` as well, for every call site is hardly appealing or reasonable. The entire cache is also invalidated very frequently: practically every keystroke outside a method body can introduce or remove a type. Even with this invalidation rate, the cache has a 99.993% hit rate, so it is still extremely useful. Turning invalidation into the task of clearing a huge collection of individual fields would be unacceptable.
+
+If `GetType()` could receive an object identifying its call site, we could build a much *more granular cache*. C# already uses similar techniques, which I will come back to shortly. Imagine a language extension called *first-class call sites*, where a call site is represented as a value. It could make this kind of caching easier to express. Here is a factorial example using hypothetical syntax:
 
 ```c#
-// декларация:
-static int Fact(int x, Dictionary<int, int> cache = callsite) {
+// declaration
+private static int Fact(int x, Dictionary<int, int> cache = callsite)
+{
   int result;
   if (cache.TryGetValue(x, out result)) return result;
 
@@ -38,15 +44,17 @@ static int Fact(int x, Dictionary<int, int> cache = callsite) {
   return result;
 }
 
-// использование:
+// usage
 Fact(6);
 
 ```
 
-Всё достаточно просто и явно - надо лишь научить компилятор генерировать скрытые поля на стороне вызова и автоматически передавать их в опциональные параметры, отмеченные некоторой аннотацией, например (я пока не пытаюсь ответить на вопросы инвалидации таких “разбросанных” кэшей).
+The idea is fairly straightforward: teach the compiler to generate hidden fields for each call site and automatically pass their values to optional parameters marked with an appropriate annotation. For now, I am leaving aside the question of how to invalidate these distributed caches.
 
-Подобную технику использует C# 4.0 dynamic - вместо того, чтобы компилировать, например, выражение доступа к члену объекта типа `dynamic` вида `d.Foo`, в простой вызов какой-нибудь функции типа `GetMemberDynamic(object target, string name)`, компилятор совершает гораздо больше телодвижений. На каждую `dynamic`-операцию один раз создаётся и хранится в статическом поле специальный callsite-объект, который хранит всякую инфраструктурную фигню и самый обычный .NET-делегат, который на самом деле и вызывается на каждую динамическую операцию. При первом исполнении кода, инфраструктура C# dynamic согласно статическим правилам компилятора C# пытается разрезолвить динамическую операцию и в случае успеха компилирует (!) постой делегат, совершающий требуемую операцию. Помимо требуемой операции в делегат попадает специальный инфраструктурный код, который будет осуществлять проверку - можно-ли при повторном вызове динамической операции переиспользовать скомпилированный делегат? Например, если код `foo.Bar` первый раз разрезолвился в обращение к свойству `Foo` у класса типа `ConcreteFoo`, то скомпилированный делегат можно будет переиспользовать если при повторном вызове `foo` будет типа `ConcreteFoo`. В противном случае процедуру резолва придётся повторить ещё раз и инфраструктура C# dynamic подменит старый делегат, скомпилировав новый (причём последние 10 делегатов останутся в callsite-объекте, так как могут ещё пригодиться).
+C# 4.0's `dynamic` uses a similar technique. An expression such as `d.Foo`, where `d` is `dynamic`, is not simply translated into a call to something like `GetMemberDynamic(object target, string name)`. The compiler does considerably more work. Each dynamic operation gets a call-site object, created once and stored in a static field. Along with the binding infrastructure, this object holds an ordinary .NET delegate that is invoked whenever the operation executes.
 
-Всё это шаманство приводит к тому, что немного “прогревшись”, большинство динамических операции обращаются в очень эффективные (по сравнению с первым резолвом, возбуждающим компиляцию) вызовы обычных делегатов с одним-двумя `if`, что в некотором роде доказывает состоятельность и целесообразность кэширования на стороне вызова в подобных сценариях. Фактически, эта техника аналогична модификации исполняемого кода во время исполнения для кэширования (polymorphic inline caching), которую делает большинство современных JavaScript-движков или, например, CLR JIT для компилирования вызовов через интерфейс.
+On the first execution, the dynamic binding infrastructure applies the C# binding rules at runtime to resolve the operation. If successful, it compiles a delegate that performs the operation. The generated code also checks whether that delegate can be reused on subsequent executions. For example, if `foo.Bar` initially resolves to the `Bar` property on a `ConcreteFoo` instance, the delegate can be reused when `foo` is again a `ConcreteFoo`.
 
-В следующем посте я постараюсь выразить на C# кэширование на вызывающей стороне с минимальным синтаксическим шумом (без него, к сожалению, не обойтись).
+Otherwise, the operation must be resolved again, and the infrastructure can compile a replacement delegate. The implementation keeps the ten most recent delegates in the call-site object, since they may be useful again.
+
+After a little warm-up, most dynamic operations therefore become calls to ordinary delegates with one or two `if` checks. This is much more efficient than the initial binding and compilation, and demonstrates the value of caching at the call site in scenarios like this. It is closely related to *polymorphic inline caching*, where executable code is updated at runtime to cache dispatch decisions. Similar techniques are used by JavaScript engines and by the CLR JIT for interface calls.
