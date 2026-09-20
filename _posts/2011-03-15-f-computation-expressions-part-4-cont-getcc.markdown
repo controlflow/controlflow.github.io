@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "F# computation expressions: part 4, cont & getCC"
+title: "F# computation expressions: cont & getCC (part 4)"
 date: 2011-03-15 14:00:00
 author: Aleksandr Shvedov
 tags: fsharp cont computation expressions monads callcc getcc

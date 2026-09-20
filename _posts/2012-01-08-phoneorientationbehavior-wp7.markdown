@@ -1,13 +1,13 @@
 ---
 layout: post
-title: "PhoneOrientationBehavior для WP7"
+title: "PhoneOrientationBehavior for WP7"
 date: 2012-01-08 20:52:00
 author: Aleksandr Shvedov
 tags: csharp wp7 .net behavior
 ---
-По мере ~~ужасания~~ ковыряния API виндофончиков, рождаются ~~вело~~кусочки кода, претендующие на переиспользование. Начнём с behavior’а, который помогает скрывать те или иные элементу управления в альбомной ориентации WP7-девайса, так как большие отступы, всякие названия приложений и прочие элементы metro-дизайна просто нещадно кушают место на экране.
+As I explore the Windows Phone APIs, I keep finding small pieces of code worth reusing. Here is a behavior that hides selected controls when a WP7 device is in landscape orientation: generous margins, application titles, and other elements of the Metro design language can take up a substantial amount of the available screen space.
 
-Начнём с базового класса:
+Let us start with the base class:
 
 ```c#
 using System.Windows;
@@ -17,15 +17,17 @@ using Microsoft.Phone.Controls;
 public abstract class PhoneOrientationBehavior<T> : Behavior<T>
   where T : FrameworkElement
 {
-  bool isSubscribedWhenAttached;
+  private bool isSubscribedWhenAttached;
 
-  protected override void OnAttached() {
+  protected override void OnAttached()
+  {
     base.OnAttached();
 
-    // если behavior применён к startup-странице, то
-    // RootVisual на данный момент будет инициализирован null'ом
+    // if the behavior is attached to the startup page,
+    // the RootVisual property is still null at this point
     var root = Application.Current.RootVisual as PhoneApplicationFrame;
-    if (root != null) {
+    if (root != null)
+    {
       root.OrientationChanged += OrientationChanged;
       isSubscribedWhenAttached = true;
     }
@@ -36,7 +38,8 @@ public abstract class PhoneOrientationBehavior<T> : Behavior<T>
   private void ElementLoaded(object sender, RoutedEventArgs e)
   {
     var root = Application.Current.RootVisual as PhoneApplicationFrame;
-    if (root != null) {
+    if (root != null)
+    {
       if (!isSubscribedWhenAttached)
         root.OrientationChanged += OrientationChanged;
 
@@ -51,16 +54,20 @@ public abstract class PhoneOrientationBehavior<T> : Behavior<T>
     ApplyOrientation(e.Orientation);
   }
 
-  private void ApplyOrientation(PageOrientation orientation) {
-    switch (orientation) {
+  private void ApplyOrientation(PageOrientation orientation)
+  {
+    switch (orientation)
+    {
       case PageOrientation.LandscapeRight:
-      case PageOrientation.LandscapeLeft: {
+      case PageOrientation.LandscapeLeft:
+      {
         ApplyOrientation(false);
         break;
       }
 
       case PageOrientation.PortraitUp:
-      case PageOrientation.PortraitDown: {
+      case PageOrientation.PortraitDown:
+      {
         ApplyOrientation(true);
         break;
       }
@@ -69,7 +76,8 @@ public abstract class PhoneOrientationBehavior<T> : Behavior<T>
 
   protected abstract void ApplyOrientation(bool isPortrait);
 
-  protected override void OnDetaching() {
+  protected override void OnDetaching()
+  {
     base.OnDetaching();
 
     var root = Application.Current.RootVisual as PhoneApplicationFrame;
@@ -80,7 +88,7 @@ public abstract class PhoneOrientationBehavior<T> : Behavior<T>
 }
 ```
 
-Теперь можно определить наследника, реализующего сокрытие элементов управления в альбомной ориентации:
+We can now derive a behavior that hides controls in landscape orientation:
 
 ```c#
 using System.Windows;
@@ -90,7 +98,8 @@ public sealed class PortraitOrientationVisibilityBehavior
 {
   public bool Invert { get; set; }
 
-  protected override void ApplyOrientation(bool isPortrait) {
+  protected override void ApplyOrientation(bool isPortrait)
+  {
     if (Invert) isPortrait = !isPortrait;
 
     AssociatedObject.Visibility = isPortrait
@@ -100,7 +109,7 @@ public sealed class PortraitOrientationVisibilityBehavior
 }
 ```
 
-Однако этот behavior не удастся применить, чтобы скрыть виндофоновый system tray и application bar (что может быть полезно, например, если он содержит лишь малозначимые пункты меню типа отправки feedback’а). Не проблема, создаём ещё одного наследника `PhoneOrientationBehavior` и применяем к `PhoneApplicationPage`'ам:
+This behavior cannot hide the Windows Phone system tray or application bar. Hiding the latter can be useful when it contains only secondary menu items, such as an option to send feedback. We can handle both by deriving another behavior from `PhoneOrientationBehavior` and attaching it to a `PhoneApplicationPage`:
 
 ```c#
 using Microsoft.Phone.Controls;
@@ -111,7 +120,8 @@ public sealed class PortraitOrientationSystemTrayVisibility
 {
   public bool HideApplicationBar { get; set; }
 
-  protected override void ApplyOrientation(bool isPortrait) {
+  protected override void ApplyOrientation(bool isPortrait)
+  {
     SystemTray.SetIsVisible(AssociatedObject, isPortrait);
     if (HideApplicationBar)
       AssociatedObject.ApplicationBar.IsVisible = isPortrait;
@@ -119,4 +129,4 @@ public sealed class PortraitOrientationSystemTrayVisibility
 }
 ```
 
-А вообще по-хорошему, надо разобраться с templated-контролами и сделать layout-контрол, позволяющий задавать два шаблона layout’ов (portrait и landscape, соответственно) с некими content placeholder’ами и наполнять его контентом - это может существенно упростить разработку UI, поддерживающего две ориентации экрана.
+A more flexible approach would be to explore templated controls and build a layout control with separate portrait and landscape templates. Each template could provide placeholders for the same content. This could make it much easier to build interfaces that support both screen orientations.

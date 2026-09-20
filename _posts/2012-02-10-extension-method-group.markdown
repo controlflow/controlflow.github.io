@@ -1,36 +1,41 @@
 ---
 layout: post
-title: "Делегат из extension method group"
+title: "Delegate from an extension method group"
 date: 2012-02-10 19:04:00
 author: Aleksandr Shvedov
 tags: csharp delegate
 ---
-Интересно, я ожидал от компилятора C# в таком коде скрытого замыкания:
+I expected the C# compiler to generate a hidden closure for the following code:
 
 ```c#
-static class Foo {
-  static void Bar(this string source) { }
-  static void Main() {
+static class Foo
+{
+  private static void Bar(this string source) { }
+
+  private static void Main()
+  {
     System.Action boo = "abc".Bar;
   }
 }
 
 ```
 
-На самом деле компилятор сгенерировал здесь точно такой же msil, как если бы метод `Bar()` был настоящим методом уровня экземпляра типа `System.String`, сохранив экземпляр строки в экземпляре делегата - так же, как сохраняет и автоматически “подставляет” в качестве первого параметра скрытый от пользователя `this`.
+Instead, the compiler emits the same IL for creating the delegate as it would if `Bar()` were an instance method on `System.String`. The delegate stores the string instance and supplies it as the first argument, just as an ordinary instance-method delegate stores and supplies the implicit `this` argument. Unfortunately, this trick do not works for the `this` parameters of the value type, C# rejects method groups like this (since boxing is required to attach the value to the delegate instance, and boxing observably copies the value - delegate invocation will invoke the instance struct method over the boxed copy, not the original value).
 
-Было бы интересно иметь противоположную возможность - позволить создавать из методов уровня экземпляра делегаты с произвольным `this`-параметром, допустив указание произвольного экземплярного метода без экземпляра соответствующего типа (и даже нет проблем пересечения с именами статических методов):
+I would also like to have the ability to express the reverse operation: creating a delegate from an instance member without binding it to a particular object, and supplying the receiver as the delegate's first argument instead. There seems to be no conflict with static method names, either. For example, a property getter could be exposed using hypothetical syntax like this:
 
 ```c#
 System.Func<string, int> boo = System.String.Length;
 ```
 
-Однако очевидная проблема данной фичи проявляется в случае использования виртуальных методов:
+Virtual methods, however, raise an immediate question:
 
 ```c#
 System.Func<Foo, int> boo = Foo.GetHashCode;
 ```
 
-Из какого именно метода делать делегат? Из метода `Foo.GetHashCode()`? Что, если тип `Foo` не переопределяет метод `GetHashCode()` - брать реализацию `Object.GetHashCode`? Что, если первым параметром делегата передадут наследника `Foo`, имеющего свою реализацию `GetHashCode()` - вызывать эту реализацию (тогда делегат никогда не будет указывать на какой-то конкретный метод) или использовать реализацию типа `Foo` (что позволяет на наследниках вызовы `Foo.GetHashCode()`, которые могут быть недопустимы)? Допускать-ли такую запись, если метод `GetHashCode()` объявлен абстрактным? Кстати, `Object.GetHashCode()`, как и любой другой виртуальный метод, можно переопределить и одновременно сделать абстрактным, путём комбинирования модификаторов `abstract` и `override` - что делать в таком случае?
+Which implementation should the delegate invoke? `Foo.GetHashCode()`? If `Foo` does not override it, should that be `Object.GetHashCode()`? What if the delegate's first argument is an instance of a subclass of `Foo` that provides its own override? Should that override be called, meaning that the delegate is not bound to one particular implementation? Or should it call the implementation on `Foo`, allowing callers to bypass the subclass override even when doing so might be inappropriate?
 
-Вообщем, мягко говоря, сомнительная фича получается :)
+Should this syntax be allowed when `GetHashCode()` is abstract? Like any other virtual method, `Object.GetHashCode()` can be overridden and made abstract at the same time by combining the `abstract` and `override` modifiers. How should that case work?
+
+All of this makes me question whether the feature would be worthwhile.

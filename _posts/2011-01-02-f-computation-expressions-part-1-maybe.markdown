@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "F# computation expressions: part 1, maybe"
+title: "F# computation expressions: maybe (part 1)"
 date: 2011-01-02 14:17:00
 author: Aleksandr Shvedov
 tags: fsharp computation expressions monads maybe option

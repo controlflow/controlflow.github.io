@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "F# computation expressions: part 2, state"
+title: "F# computation expressions: state (part 2)"
 date: 2011-01-02 16:32:00
 author: Aleksandr Shvedov
 tags: fsharp computation expressions monads state

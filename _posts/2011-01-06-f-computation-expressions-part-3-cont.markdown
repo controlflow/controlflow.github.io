@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "F# computation expressions: part 3, cont"
+title: "F# computation expressions: cont (part 3)"
 date: 2011-01-06 17:04:00
 author: Aleksandr Shvedov
 tags: fsharp monads computation expressions cont async callcc
