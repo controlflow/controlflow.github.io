@@ -208,7 +208,7 @@ Have you ever wondered whether any code can run before `Main()`, the entry point
    ```
    The domain manager runs even before the application assembly is loaded, ahead of the assembly-level CAS checks.
 
-5. *Startup hooks (modern .NET).* The [`DOTNET_STARTUP_HOOKS`](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) environment variable lets you run managed code before the application's entry point without modifying the application. Create a separate assembly, such as `Hook.dll`, containing a type named `StartupHook` in the global namespace:
+5. *Startup hooks* (modern .NET, post update from year 2026) The [`DOTNET_STARTUP_HOOKS`](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) environment variable lets you run managed code before the application's entry point without modifying the application. Create a separate assembly, such as `Hook.dll`, containing a type named `StartupHook` in the global namespace:
 
    ```c#
    internal static class StartupHook
