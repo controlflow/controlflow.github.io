@@ -1,13 +1,13 @@
 ---
 layout: post
-title: "Что нового в F# 3.0 - part 1: автосвойства"
+title: "What's new in F# 3.0: auto-properties"
 date: 2012-03-14 15:56:08
 author: Aleksandr Shvedov
 tags: fsharp autoprops fprog
 ---
-Сегодня я хочу рассказать о нововведениях мультипарадигменного (но functional-first) языка программирования общего назначения F# версии 3.0. Последняя версия F# на данный момент доступна только в составе с Visual Studio “11” Beta (качать [тут](http://www.microsoft.com/visualstudio/11/en-us)), что немного грустно. Самих нововведений совсем не много, но некоторые из них достаточно значимые. Сегодня речь пойдёт об автосвойствах.
+Today I want to look at the new features in F# 3.0, a general-purpose language that supports multiple paradigms while putting functional programming first. At the time of writing, this version is available only as part of [Visual Studio “11” Beta](http://www.microsoft.com/visualstudio/11/en-us), which is a little disappointing. There are not many new features, but some are significant. This post focuses on auto-properties.
 
-В F# достаточно запутанный синтаксис определения обычных классов, который я постоянно забываю, хотя после того как осознаёшь все нюансы, он может начинать казаться достаточно лаконичным. До версии 3.0, для того чтобы определить класс с парой `get`-only свойств, приходилось писать достаточно немного:
+F# has a fairly intricate syntax for defining ordinary classes, which I keep forgetting. Once you understand the details, though, it can seem quite concise. Even before version 3.0, a class with a couple of getter-only properties required very little code:
 
 ```fsharp
 type Person(name, age) =
@@ -15,7 +15,7 @@ type Person(name, age) =
   member this.Age  = age  : int
 ```
 
-Пример выше - особая короткая форма записи `get`-only свойств, более полная запись выглядит следующим образом (обратите внимание, что в примере выше я уточнил тип не самим свойствам, а их выражениям. В примере ниже аннотации типов относятся непосредственно к свойствам, что удобно, когда выражение свойства не является тривиальным):
+This uses a special shorthand for getter-only properties. The full form looks like this. Notice that the type annotations above apply to the property expressions, whereas those below apply directly to the properties. The latter is convenient when a property expression is more complex:
 
 ```fsharp
 type Person(name, age) =
@@ -23,7 +23,7 @@ type Person(name, age) =
   member this.Age  : int    with get() = age
 ```
 
-Причём набор необходимых полей компилятор определяет сам - в тривиальном случае он просто превращает в поля все параметры *primary-конструктора*, которые имеют *как минимум одно использование* в определении членов класса. В более сложных случаях, в поля превращаются `let`-биндинги уровня типа. Например, у класса ниже будет два поля - параметр `name` используется только в инициализации `let`-биндинга и ни разу не используется в членах класса, поэтому поле для него создано не будет, а для самого `let`-биндинга `mrName` - будет:
+The compiler determines which fields are needed. In the simplest case, it creates a field for each *primary constructor* parameter used *at least once* in a member definition. Class-level `let` bindings can also become fields. For example, the following class has two fields. The `name` parameter is used only to initialize a `let` binding, never in a member, so it does not need a field. The `mrName` binding does:
 
 ```fsharp
 type MrPerson(name, age) =
@@ -32,7 +32,7 @@ type MrPerson(name, age) =
   member this.Age  = age    : int
 ```
 
-Так как F# является полноправным жителем объектно-ориентированного мутабельного мира .NET, то язык, конечно же, предоставляет возможность определять изменяемые, `get`/`set`-свойства. Однако параметры primary-конструктора являются неизменяемыми (как и вообще любые другие параметры функций и методов F#), то их не выйдет использовать для хранения изменяемых полей. На помощь приходят изменяемые `let`-биндинги уровня типа, однако запись класса значительно разбухает:
+As a language that participates fully in the mutable, object-oriented world of .NET, F# also supports properties with both getters and setters. Primary constructor parameters are immutable, just like other F# function and method parameters, so they cannot themselves provide mutable storage. Mutable `let` bindings inside the class solve this, but the definition becomes considerably longer:
 
 ```fsharp
 type MutablePerson(name, age) =
@@ -44,7 +44,7 @@ type MutablePerson(name, age) =
                     and set x = age <- x
 ```
 
-Или даже вот так:
+The accessors can also be written separately:
 
 ```fsharp
 type HugePerson(name, age) =
@@ -56,7 +56,9 @@ type HugePerson(name, age) =
   member this.Age  with set x = age <- x
 ```
 
-Обратите внимание, что параметры методов-аксессоров пишутся явно и можно объявлять *"индексированные свойства"*, такие же как в VB.NET, но это достаточно редко используемая возможность. Однако в F# существует ещё более громоздкий синтаксис для классов без primary-конструктора (то есть без скобочек с опциональными параметрами класса после имени типа) и `let`-биндингов, дающий пользователю возможность задать набор полей явно. При такой записи конструкторы должны содержать либо вызовы других конструкторов, либо инициализировать все явно определённые поля объекта (кроме помеченных атрибутом `[<DefaultValue>]`) и при необходимости вызывать конструктор базового класса. Определение всего этого безобразия, соответственно, распухает практически до уровня C# 2.0:
+Accessor parameters are written explicitly, and F# supports *indexed properties*, much like VB.NET, although this feature is rarely used.
+
+There is an even more verbose syntax for classes without a primary constructor: the type name is not followed by a parenthesized parameter list, and there are no class-level `let` bindings. Instead, fields are declared explicitly. A constructor must either call another constructor or initialize every explicitly declared field except those marked `[<DefaultValue>]`, calling a base constructor where necessary. The resulting definition is almost as verbose as its C# 2.0 equivalent:
 
 ```fsharp
 type ExplicitMutablePerson =
@@ -67,11 +69,11 @@ type ExplicitMutablePerson =
 
   member this.Name with get() = this.name
                     and set x = this.name <- x
-  member this.Age  with get() = this.age
-                    and set x = this.age <- x
+  member this.Age with get() = this.age
+                   and set x = this.age <- x
 ```
 
-Обратите внимание, что в отличии от параметров primary-конструктора и `let`-биндингов уровня типа, к явным полям приходится обращаться точно так же, как и к другим членам класса - явно через квалификатор `this` (смотря как вы его назвали в том или ином члене класса). Поля по-умолчанию являются изменяемыми, поэтому требуют модификатора `mutable`. Неизменяемый вариант класса с явными полями принимает следующий вид:
+Unlike primary constructor parameters and class-level `let` bindings, explicit fields must be accessed through a receiver, just like other members. Here that receiver is named `this`, though each member can use a different name. Fields are immutable by default; making them mutable requires the `mutable` modifier. The immutable version with explicit fields looks like this:
 
 ```fsharp
 type ExplicitImmutablePerson =
@@ -81,70 +83,76 @@ type ExplicitImmutablePerson =
   val age  : int
 
   member this.Name = this.name
-  member this.Age  = this.age
+  member this.Age = this.age
 ```
 
-Кстати, при такой записи возможно выполнить какой-либо дополнительный код после инициализации объекта:
+This form also allows additional code to run after the object has been initialized:
 
 ```fsharp
 type InstantiateMe =
-  new () = { } // инициализация объекта
-           then // side-effects тут:
+  new () = { } // initialize the object
+           then // perform side effects here:
              printfn "thank you!"
 ```
 
-Теперь мы наконец подошли к новому синтаксису автосвойств, которые представляет нашему вниманию F# 3.0, неизменяемые свойства принимают вид:
+This brings us to the new auto-property syntax in F# 3.0. Getter-only auto-properties look like this:
 
 ```fsharp
 type Person(name, age) =
   member val Name = name : string
-  member val Age  = age  : int
+  member val Age = age : int
 ```
 
-Код практически идентичен самому первому, однако есть отличия. При использовании ключевого слова `member val` становится не нужно давать имя `this`-параметру, поле для значения генерируется компилятором в любом случае, а обязательное выражение после символа `=` является не телом `get`-аксессора свойства, а выражением инициализации автосвойства при инстанциировании экземпляра класса. То есть конкатенация строк в примере ниже происходит только один раз, при создании экземпляра `MrPerson`:
+The code is almost identical to the first example, but the semantics differ. With `member val`, there is no need to name a `this` parameter, and the compiler always generates a backing field. The required expression after `=` initializes the property when the object is created; it is not the body of the getter. In the following example, the string concatenation therefore happens only once per `MrPerson` instance:
 
 ```fsharp
 type MrPerson(name, age) =
   member val Name = "Mr. " + name
-  member val Age  = age  : int
+  member val Age = age : int
 ```
 
-При этом так же, как в C#, вы не имеете доступа к backing-полям таких свойств. Теперь самое приятное - чтобы сделать такие свойства изменяемыми, достаточно после выражения инициализации дописать `with get, set`:
+As in C#, the backing fields are inaccessible from source code. To make these properties mutable, simply add `with get, set` after the initializer:
 
 ```fsharp
 type MutablePerson(name, age) =
   member val Name = name : string with get, set
-  member val Age  = age  : int    with get, set
+  member val Age = age : int with get, set
 ```
 
-Получаемый синтаксис практически аналогичен автосвойствам C#, но выглядит немного более громоздким. Однако аннотации типов в F# могут быть выведены из использования в других членах класса, а синтаксис инициализации всё равно гораздо компактнее явных присваиваний в конструкторе, используемых в мире C#:
+The syntax is close to C# auto-properties, though a little more verbose. However, F# can infer the types from usage in other members, and initialization is still much more compact than the explicit constructor assignments required in C#:
 
 ```c#
-class MutablePerson {
-  public MutablePerson(string name, int age) {
+class MutablePerson
+{
+  public MutablePerson(string name, int age)
+  {
     Name = name;
     Age = age;
   }
 
   public string Name { get; set; }
-  public int    Age  { get; set; }
+  public int Age { get; set; }
 }
 ```
 
-Автосвойства могут быть статическими, как и обычные свойства, достаточно использовать для определения модификатор `static`. Однако у автосвойств F# есть ограничения - например, их можно использовать только в типах с primary-конструктором, точно так же, как и `let`-биндинги уровня типа (это связано с особенностями процесса инициализации объектов в F#, о которых я постараюсь рассказать в других постах). Ещё одним важным и просто замечательным ограничением является то, что автосвойства в F# не могут быть виртуальными - это решает потенциальную проблему о “забытом” состоянии в базовом классе (к аналогичным [проблемам](http://blogs.msdn.com/b/samng/archive/2007/11/26/virtual-events-in-c.aspx) могут приводить виртуальные field-like события в C#).
+Like ordinary properties, auto-properties can be static: just add the `static` modifier. They do have some restrictions. Like class-level `let` bindings, they are allowed only in types with a primary constructor. This follows from the way F# initializes objects, a topic I hope to cover in another post.
 
-Ещё одним нюансом является то, что события в F# представляются в виде свойств, которые компилятор можно заставить компилироваться в обычные CLR-события путём аннотации свойства атрибутом `[<CLIEvent>]`. Этот атрибут работает и для автосвойств:
+Another restriction, which I particularly like, is that F# auto-properties cannot be virtual. This avoids the potential problem of unused backing state being left behind in a base class when a derived class overrides the property. Virtual field-like events in C# can cause [similar problems](http://blogs.msdn.com/b/samng/archive/2007/11/26/virtual-events-in-c.aspx).
+
+Events in F# are exposed through properties. Adding `[<CLIEvent>]` tells the compiler to generate an ordinary CLR event, and the attribute also works with auto-properties:
 
 ```fsharp
 type WithEvent() =
   let doneEvent = new Event<EventHandler, _>()
-  [<CLIEvent>] // автосвойство-событие
+  [<CLIEvent>] // an auto-property exposed as an event
   member val Done = doneEvent.Publish
   member this.Complete() =
     doneEvent.Trigger(this, EventArgs.Empty)
 ```
 
-Однако такой класс содержит два поля (поля для свойства `Done` и `let`-привязки `doneEvent`), вместо одного действительно нужного (`doneEvent`). Замена свойства на обычное устраняет избыточное поле. К сожалениею, в отличие от автосвойств C#, аннотировать аттрибутами методы-аксессоры ни обычных свойст, ни автосвойств - невозможно (точно так же, как в F# 2.0). Однако backing-поле автосвойства аннотировать всё же можно:
+This class contains two fields: one for the `Done` property and another for the `doneEvent` binding. Only `doneEvent` is really needed; using an ordinary property removes the extra field.
+
+Unfortunately, as in F# 2.0, neither ordinary property accessors nor auto-property accessors can be annotated with attributes, unlike in C#. The backing field of an auto-property can still be annotated:
 
 ```fsharp
 type Person(name: string, age: int) =
@@ -152,4 +160,4 @@ type Person(name: string, age: int) =
   member val FullName = name + string age with get
 ```
 
-Автосвойства F# 3.0 производят приятное впечатление и существенно снижают уровень синтаксического шума при определении изменяемых свойств, которые достаточно частно нужны для интероперабельности с .NET-библиотеками. Однако становится важно отличать автосвойства от обычных свойств и понимать отличие выражения инициализации автосвойства от выражений значений обычных свойств, что ещё немного запутывает и без того нелёгкие правила деклараций типов F#. В то же время определять обычные классы в F# приходится гораздо реже, чем record-типы и union-типы.
+Auto-properties are a welcome addition to F# 3.0. They substantially reduce the boilerplate needed for mutable properties, which are often required when working with .NET libraries. The distinction between an auto-property initializer and an ordinary property's getter expression does add another detail to the already intricate rules for F# type definitions. Still, ordinary classes are needed much less often than record and union types.

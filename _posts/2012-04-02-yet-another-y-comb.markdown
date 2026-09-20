@@ -1,42 +1,44 @@
 ---
 layout: post
-title: "Очередной Y-комбинатор на C#"
+title: "Yet another Y combinator in C#"
 date: 2012-04-02 17:18:39
 author: Aleksandr Shvedov
 tags: y combinator csharp delegates
 ---
-В ходе всё ещё тщетных попыток написать на C# типизированную версию клёвого и особо опасного для мозга U-комбинатора (Y-комбинатор без рекурсии):
+While trying, so far unsuccessfully, to write a typed C# version of the U combinator, which constructs a Y combinator without explicit recursion:
 
 ```c#
 Y = (λh.λF.F(λx.((h(h))(F))(x))) (λh.λF.F(λx.((h(h))(F))(x)))
 ```
 
-Получился забавный Y-комбинатор тоже без рекурсии, с рекурсивным типом-делегатом, стало жалко выбрасывать, решил положить здесь:
+I arrived at another Y combinator that also avoids explicit recursion, using a recursively defined delegate type. It seemed worth keeping:
 
 ```c#
 delegate β ƒ<α, β>(α x);
 delegate α γ<α>(γ<α> f);
 
-static ƒ<α, β> Y<α, β>(ƒ<ƒ<α, β>, ƒ<α, β>> f) {
+private static ƒ<α, β> Y<α, β>(ƒ<ƒ<α, β>, ƒ<α, β>> f)
+{
   return new γ<ƒ<α, β>>(h => F => f(h(h))(F))(h => F => f(h(h))(F));
 }
 ```
 
-Осталось взять всеми любимый факториал с аргументами в каррированной форме:
+We can then express factorial in curried form, with the recursive function as its first argument:
 
 ```c#
-static ƒ<int, int> Fact(ƒ<int, int> fact) {
+private static ƒ<int, int> Fact(ƒ<int, int> fact)
+{
   return n => (n == 0) ? 1 : n * fact(n - 1);
 }
 ```
 
-И скормить его комбинатору:
+And pass it to the combinator:
 
 ```c#
 var fact = Y<int, int>(Fact);
 Console.WriteLine("fact(6) = {0}", fact(6));
 ```
 
-Поздравляю, теперь вы вооружены на случай, если из C# когда-нибудь дропнут рекурсивные вызовы :)
+This gives us recursive behavior without an explicit self-call in either `Y` or `Fact`.
 
-p.s. U-комбинатор по прежнему в поиске своего типизированного аналога!
+The search for a typed version of the U combinator continues.

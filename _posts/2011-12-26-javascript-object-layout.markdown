@@ -5,6 +5,6 @@ date: 2011-12-26 16:09:13
 author: Aleksandr Shvedov
 tags: javascript
 ---
-Просто положу это здесь, интересно:
+An interesting diagram of JavaScript objects and their prototype relationships:
 
-![]({{ site.baseurl }}/images/js-object-layout.png)
+![JavaScript objects and their prototype relationships]({{ site.baseurl }}/images/js-object-layout.png)
