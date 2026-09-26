@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "XAML: I've had enough"
+title: "XAML technologies: I've had enough"
 date: 2012-08-13 16:18:00
 author: Aleksandr Shvedov
 tags: xaml wpf silverlight metro winrt microsoft pain

@@ -1,301 +1,333 @@
 ---
 layout: post
-title: "Итераторы и async-методы C# - так ли они похожи?"
+title: "C# iterators and async methods: are they really that similar?"
 date: 2013-08-01 21:48:00
 author: Aleksandr Shvedov
 tags: csharp async yield return closures enumerable
 ---
-Когда был анонсирован C# 5.0 с поддержкой `async`, то многие любители поворчать заметили, что в мажорной фиче как таковой нету никакой инновации, ведь товарищ Джеффри Рихтер уже сто лет назад прекрасно делал те же трюки в своей библиотечке Wintellect Power Threading с помощью типа [`AsyncEnumerator`](http://msdn.microsoft.com/en-us/magazine/cc163323.aspx) и фичи C# версии аж 2.0 - методов-итераторов.
+When C# 5.0 was announced with support for `async`, some skeptics pointed out that its headline feature was hardly new: Jeffrey Richter had been doing similar things for years in his Wintellect Power Threading library, using [`AsyncEnumerator`](http://msdn.microsoft.com/en-us/magazine/cc163323.aspx) and a feature introduced back in C# 2.0: iterator methods.
 
-Отчасти это действительно так, но разбирая детали реализации `async`/`await` во время реализации декомпиляции `async`-методов в движке декомпилятора нашего продукта откопались интересные особенности, из которых захотелось сформировать список отличий `async`-методов от итераторов:
+There is some truth to that. However, while implementing async method decompilation in our product's decompiler engine, I came across enough interesting details of the `async`/`await` transformation to put together a list of differences between async methods and iterators:
 
-* В отличие от итераторов в Python, конструкция `yield return` в C# - *стейтмент*, а не выражение. В связи с этим, значения из итераторов можно только возвращать, а вот как-то сообщать коду итератора какие-либо значения из “внешнего мира” немного проблематично - например, через состояние во вспомогательных объектах. Другое дело - ключевое слово `await`, порождающее выражение, которое можно сколько угодно раз использовать в одном стейтменте, еще и вкладывая друг в друга. Такая гибкость крайне усложняет реализацию трансформации `async`-метода в конечный автомат, так как появляется необходимость в умении сохранять значение со стека (практически всегда это временные значения, получающиеся во время вычисления выражений текущего стейтмента) в замыкание, если какой-либо из `await`'ов потребует отложить исполнение метода.
+* Unlike Python's `yield`, C#'s `yield return` is a *statement*, not an expression. An iterator can yield values, but passing values back into its body from the outside is awkward: it requires something like shared state in a helper object. The `await` keyword, on the other hand, produces an expression. A single statement can contain any number of `await` expressions, even nested ones. This flexibility makes the transformation of an async method into a state machine much more complicated. If an `await` needs to suspend execution, values on the evaluation stack—usually temporary results from evaluating the current statement—must be saved in the state machine.
 
-Трансформация еще более усложняется тем, что на стеке могут существовать значения типа (непредставимого явно в C#), значения которого нельзя откладывать в замыкания (так как получаемый MSIL перестает быть верифицируемым) - типа *managed-ссылок*, используемого для `ref`/`out`-параметров в C#. В таких случаях компилятор C# должен куда-то сохранить в замыкание все необходимое для того, чтобы *повторно получить* managed-ссылку после продолжения исполнения `async`-метода. Вот такой простой `async`-метод:
+  The transformation becomes even more complicated because the stack can contain values of a type that C# cannot express directly and that cannot be stored in a closure without making the resulting MSIL unverifiable: *managed references*, used for C#'s `ref` and `out` parameters. In these cases, the compiler has to save everything needed to *reconstruct* the managed reference when the async method resumes. This simple method:
 
-```c#
-class Foo {
-  async void Bar(int[] xs, int i, Task<int> t) {
-    M(ref xs[i], await t);
+  ```c#
+  class Foo
+  {
+    private async void Bar(int[] xs, int i, Task<int> t)
+    {
+      M(ref xs[i], await t);
+    }
   }
-}
-```
+  ```
 
-Разворачивается вот в такую простыню, использующую даже семейство типов `System.Tuple<..>` из состава BCL 4.0:
+  Expands into the following code, which even uses the `System.Tuple<...>` family from the .NET 4.0 Base Class Library:
 
-```c#
-class Foo {
-  void Bar(int[] xs, int i, Task<int> t) {
-    BarStateMachine sm;
-    // складываем параметры и this в замыкание
-    sm._this = this;
-    sm._xs = xs;
-    sm._i = i;
-    sm._t = t;
-    // подготавливаем инфраструктуру
-    sm._builder = AsyncVoidMethodBuilder.Create();
-    sm._state = -1;
-    // теперь структура на стеке полностью инициализирована
-    // запускаем метод, не бокся и не копируя структуру
-    sm._builder.Start(ref sm);
-  }
-}
-
-[StructLayout(LayoutKind.Auto)] // выровнить поля
-struct BarStateMachine : IAsyncStateMachine {
-  // инфраструктура:
-  public int _state;
-  public AsyncVoidMethodBuilder _builder;
-  private TaskAwaiter<int> _awaiter;
-  private object _stack;
-  // замыкание:
-  public Foo _this;
-  public int[] _xs;
-  public int _i;
-  public Task<int> _t
-
-  void IAsyncStateMachine.MoveNext() {
-    try { // всегда исполняемся под try-catch
-
-    Foo @this;
-    int[] xs;
-    int i;
-
-    TaskAwaiter<int> awaiter;
-    if (_state == -1) { // проверяем состояние
-      // нас запустили первый раз, достаем
-      // замыкание в локальные переменные:
-      var thisCopy = _this;
-      var xsCopy = _xs;
-      var iCopy = _i;
-
-      awaiter = _t.GetAwaiter();
-      if (!awaiter.IsCompleted) {
-        // нужно отложить исполнение метода, складываем
-        // состояние стека в кортеж, а его в замыкание:
-        _stack = Tuple.Create(thisCopy, xsCopy, iCopy);
-        _state = 0; // двигаем состояние
-        _awaiter = awaiter;
-        // тут боксинг структуры, создание делегата для
-        // продолжения исполнения и передача его awaiter'у:
-        _builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-        return; // возвращаем управление
-      }
-
-      // awaiter сразу вернул результат
-      i = iCopy;
-      xs = xsCopy;
-      @this = thisCopy;
-    }
-    else { // продолжаем исполнение
-      // достаем из замыкания кортеж с состоянием стека
-      var tuple = (Tuple<Foo, int[], int>) _stack;
-      @this = tuple.Item1;
-      xs = tuple.Item2;
-      i = tuple.Item3;
-
-      awaiter = _awaiter;
-      // подчищаем замыкание чтобы не удерживать объекты
-      _stack = null;
-      _awaiter = default(TaskAwaiter<int>);
-      _state = -1;
-    }
-
-    // достаем результат из awaiter'а
-    var result = awaiter.GetResult();
-    // и наконец вызываем метод M()
-    @this.M(ref xs[i], result);
-
-    } catch (Exception ex) {
-      _state = -2;
-      _builder.SetException(ex);
-      return;
-    }
-
-    _state = -2;
-    _builder.SetResult();
-  }
-}
-```
-
-* У итераторов из-за природы интерфейса `IEnumerable` есть особенность - `GetEnumerator()` можно вызвать несколько раз. Каждый из возвращенных `IEnumerator`'ов представляет собой исполнение итератора с переданными ему значениями параметров. Так как параметры по сути являются переменными и их могут изменить в теле итератора, компилятор C# откладывает значения параметров в отдельное замыкание, которое потом копирует в каждый из `IEnumerator`'ов. Однако, если итератор сделать возвращающим тип `IEnumerator`, то дополнительное замыкание создаваться не будет и итератор будет действительно “одноразовым”.
-
-Однако, на момент реализации итераторов в C# 2.0 почему-то совсем не задумались о сборке мусора. В отличие от обычных методов, в которых и локальные переменные (и даже `this`) могут быть (и часто бывают) собраны сборщиком мусора еще до окончания работы метода, в итераторах все локальные переменные, попавщие в замыкание (то есть существующие между `yield return`'ами), будут строгими ссылками, держащими объекты пока весь объект итератора не подвергнется сборке мусора.
-
-Ситуацию можно улучшить, если анализировать достижимость переменных замыкания и при выходе переменной из зоны достижимости в коде итератора затирать ее поле в замыкании `null`'ом (или `default(T)` для типов-значений). Именно это происходит в `async`-методах (можно увидеть на примере поля `_awaiter` из кода выше), так как `async`-методы всегда “одноразовые” и не хранят состояние первоначального вызова.
-
-* Вызов итератора возвращает управление сразу же - итератор сохраняет значения переданных параметров в `IEnumerable`/`IEnumerator`-замыкание, которое тут же возвращается вызывающей стороне. В случае `async`-методов момент возврата управления вызывающей стороне может быть неизвестен. Тип, реализующий *"awaiter pattern"* (наличие которого требует выражение `await`) и отвечающий за планировку вызова продолжения `async`-метода и возврат значения `await`-выражения, может сообщить коду async-метода, что результат получен синхронно (`TaskAwaiter`, например, синхронно вернет результат в случае, если Task под `await`'ом уже находится в `Completed`-состоянии). В таком случае `await`-выражение будет выполнено синхронно, а значит нет никаких гарантий *когда именно* будет возвращено исполнение вызывающей стороне `async`-метода.
-
-Из этого так же следует, что и экземпляр `Task`, возвращаемый самими `async`-методами в случае их полностью синхронного исполнения, возвращается вызывающей стороне уже в состоянии `Completed`, что может так же повлечь синхронные исполнения `await`'ов у вызывающей стороны. Это одновременно и замечательная оптимизация, и потенциальный источник неочевидного поведения, если ожидать от какого-нибудь `await`'а “форка” потока исполнения метода (лучше сделать `await Task.Yield()` если нужна гарантия и не жалко потенциального лишнего перключения контекста).
-
-Однако есть и замечательный плюс - в отличие от итераторов, всяческие проверки значений аргументов в начале `async`-методов происходят сразу и синхронно. Итераторы же могут маскировать неудовлетворение их предусловий, так как начало тема метода-итератора вызывается только на первый вызов `MoveNext()`, которого может и не быть вовсе (например, `xs.Take(0)`).
-
-* Из-за того, что `async`-метод может выполниться целиком синхронно, его местами значительно проще декомпилировать, чем `yield return`-итераторы. Можно просто удалить ребра графа потока исполнения, отвечающие за отложенное исполнение `await`-выражений (конкретно `if (!awaiter.IsCompleted) { … }`) и код метода уже станет вполне узнаваемым и пригодным для дальнейших трансформаций.
-
-У итераторов тоже есть дополнительные ребра, вот только они наоборот усложняют декомпиляцию. Дополнительные путь исполнения нужен для того, чтобы предусмотреть поведение итератора в случае, если его `IEnumerator`'у пользователь сделает `Dispose()`, не выполнив итератор до конца - ничего подобного в `async`-методах нет (поэтому нельзя написать полноценные итераторы на `async`-методах). В случае `Dispose`'а итератор просто исполняет все блоки `finally`, в которых находится `yield return`, на котором последний раз остановился итератор:
-
-```c#
-IEnumerator<int> Boo(int x, int y) {
-  try { yield return x; }
-  finally { Console.WriteLine("finally1"); }
-
-  try { yield return y; }
-  finally { Console.WriteLine("finally2"); }
-}
-```
-
-Трансформируется во что-то такое:
-
-```c#
-class BooIterator : IEnumerator<int>, IDisposable {
-  int _current, _state;
-  public int _x, _y;
-
-  public bool MoveNext() {
-    try {
-      switch (_state) {
-        case 0:
-          _state = 1;
-          _current = _x; // первый yeild return
-          _state = 2;
-          return true;
-        case 2:
-          _state = 1;
-          Finally1(); // вышли из первого finally
-          _state = 3;
-          _current = _y; // второй yield return
-          _state = 4;
-          return true;
-        case 4:
-          _state = 3;
-          Finally2(); // вышли из второго finally
-          break;
-      }
-      return false;
-    }
-    fault { // только в случае исключений
-      Dispose();
+  ```c#
+  class Foo
+  {
+    private void Bar(int[] xs, int i, Task<int> t)
+    {
+      BarStateMachine sm;
+      // capture the parameters and this
+      sm._this = this;
+      sm._xs = xs;
+      sm._i = i;
+      sm._t = t;
+      // prepare the infrastructure
+      sm._builder = AsyncVoidMethodBuilder.Create();
+      sm._state = -1;
+      // the struct on the stack is now fully initialized
+      // start the method without boxing or copying the struct
+      sm._builder.Start(ref sm);
     }
   }
 
-  public void Dispose() {
-    switch (_state) {
-      case 1:
-      case 2:
-        try { } finally { Finally1(); }
-        break;
-      case 3:
-      case 4:
-        try { } finally { Finally2(); }
-        break;
-    }
-  }
-
-  void Finally1() {
-    _state = -1;
-    Console.WriteLine("finally1");
-  }
-
-  void Finally2() {
-    _state = -1;
-    Console.WriteLine("finally2");
-  }
-}
-```
-
-Получается, что один и тот же код `finally`-блоков может потребоваться и во время `MoveNext()`, и во время вызова `Dispose()` - поэтому каждый `finally`-блок вообще порождает отдельный метод, что вынуждает разработчика декомпилятора склеивать обратно итератор из кусочков разных методов. Помимо этого, из-за того что итератор на каждый `yield return` всегда прерывает свое исполнение, приходится собирать табличку состояний итератора и заменять всякие `_state = 42;` на дополнительные ребра-переходы непосредственно к коду 42-ого состояния итератора.
-
-* Как говориться, “опытный читатель мог заметить”, что в отличие от итераторов, для `async`-методов для замыкания генерируется не класс, а структура. Это тоже оптимизация, позволяющая экономить на аллокации хранилища для замыкания в куче, но только в случаях когда все `await`-выражения выполнятся синхронно. Часто-ли так будет случаться - сложно судить, но я сильно сомневаюсь. Зато данная особенность замечательно запутывает реализации компиляторов и декомпиляторов, так как приходится учиться работать с value type-замыканиями.
-
-Еще хуже то, что замыкания разного вида “не компоузятся” вовсе, поэтому для `async`-лямбда-выражений и `async`-анонимных-методов (слава Вселенной что ребята из Редмонда вообще сделали их, конечно), генерируется по два замыкания. Например:
-
-```c#
-void M(int x) {
-  Func<Task> f = async () => {
-    Console.WriteLine(x);
-  };
-}
-```
-
-Превращается в:
-
-```c#
-private void M(int x) {
-  var displayClass1 = new DisplayClass1();
-  displayClass1._x = x;
-  Func<Task> func = displayClass1.Lambda;
-}
-
-// замыкание для лямбда-выражения
-[CompilerGenerated]
-sealed class DisplayClass1 {
-  public int _x;
-
-  public Task Lambda() {
-    DisplayClass2 displayClass2;
-    displayClass2._this = this;
-    displayClass2._builder = AsyncTaskMethodBuilder.Create();
-    displayClass2._state = -1;
-    displayClass2._builder.Start(ref displayClass2);
-    return displayClass2._builder.Task;
-  }
-
-  // замыкание для async-метода
-  [StructLayout(LayoutKind.Auto)]
-  struct DisplayClass2 : IAsyncStateMachine {
+  [StructLayout(LayoutKind.Auto)] // let the runtime arrange the fields
+  struct BarStateMachine : IAsyncStateMachine
+  {
+    // infrastructure
     public int _state;
-    public AsyncTaskMethodBuilder _builder;
-    public DisplayClass1 _this;
+    public AsyncVoidMethodBuilder _builder;
+    private TaskAwaiter<int> _awaiter;
+    private object _stack;
+    // captured state
+    public Foo _this;
+    public int[] _xs;
+    public int _i;
+    public Task<int> _t;
 
-    void IAsyncStateMachine.MoveNext() {
-      try {
-        if (_state != -3)
-          Console.WriteLine(_this._x);
+    void IAsyncStateMachine.MoveNext()
+    {
+      try // execution always takes place inside try-catch
+      {
+        Foo @this;
+        int[] xs;
+        int i;
+
+        TaskAwaiter<int> awaiter;
+        if (_state == -1) // check the state
+        {
+          // this is the first invocation
+          // copy the captured values into local variables
+          var thisCopy = _this;
+          var xsCopy = _xs;
+          var iCopy = _i;
+
+          awaiter = _t.GetAwaiter();
+          if (!awaiter.IsCompleted)
+          {
+            // execution must be suspended
+            // save the evaluation stack in a tuple and capture it
+            _stack = Tuple.Create(thisCopy, xsCopy, iCopy);
+            _state = 0; // advance the state
+            _awaiter = awaiter;
+            // box the struct, create a continuation delegate,
+            // and pass it to the awaiter
+            _builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
+            return; // return control to the caller
+          }
+
+          // the awaiter can provide the result immediately
+          i = iCopy;
+          xs = xsCopy;
+          @this = thisCopy;
+        }
+        else // resume execution
+        {
+          // retrieve the saved evaluation stack from the tuple
+          var tuple = (Tuple<Foo, int[], int>) _stack;
+          @this = tuple.Item1;
+          xs = tuple.Item2;
+          i = tuple.Item3;
+
+          awaiter = _awaiter;
+          // clear captured values to avoid retaining objects
+          _stack = null;
+          _awaiter = default(TaskAwaiter<int>);
+          _state = -1;
+        }
+
+        // retrieve the result from the awaiter
+        var result = awaiter.GetResult();
+        // finally, call M()
+        @this.M(ref xs[i], result);
       }
-      catch (Exception ex) {
+      catch (Exception ex)
+      {
         _state = -2;
         _builder.SetException(ex);
         return;
       }
+
       _state = -2;
       _builder.SetResult();
     }
   }
-}
-```
+  ```
 
-* Есть еще одна оптимизация в итераторах, которая отсутствует в `async`-методах. Есть мнение, что в абсолютном большинстве случаев использования `IEnumerable`-итераторов, метод `GetEnumerator()` будет вызываться ровно один раз, поэтому хотелось бы вовсе ликвидировать аллокацию экземпляра `IEnumerator`'а. Для этого используется достаточно грубый хак:
+* Iterators have a particular requirement imposed by `IEnumerable`: `GetEnumerator()` can be called more than once. Each returned `IEnumerator` represents a separate execution of the iterator with the original argument values. Parameters are variables, however, and the iterator body may modify them. The C# compiler therefore preserves their original values separately and copies them into each `IEnumerator`. If the iterator returns `IEnumerator` directly, this extra copy is unnecessary: the iterator really is single-use.
 
-```c#
-[CompilerGenerated]
-private sealed class Iterator
-  : IEnumerable<int>, IEnumerator<int> { // все в одном
+  Garbage collection seems to have received less attention when iterators were implemented in C# 2.0. In an ordinary method, objects referenced by local variables—even `this`—can often be collected before the method returns. In an iterator, locals that must survive across `yield return` statements are captured in fields. Those fields can keep the referenced objects alive until the iterator object itself is collected.
 
-  private int _current;
-  private int _state;
-  private int _initialThreadId;
+  The situation can be improved by tracking when captured variables are no longer needed and clearing their fields to `null`, or `default(T)` for value types. This is what async methods do, as the `_awaiter` field in the example above shows. Async methods are always single-use and do not need to preserve the original invocation's state for another run.
 
-  public Iterator(int state) {
-    _state = state; // изначально тут будет -2
-    // гыгы, запоминаем в каком треде вызвали итератор
-    _initialThreadId = Environment.CurrentManagedThreadId;
+* Calling an iterator method returns control immediately: it captures the arguments in an `IEnumerable`/`IEnumerator` object and returns that object to the caller. With an async method, the point at which control returns can be less predictable. A type implementing the *awaiter pattern* required by `await` is responsible for scheduling the method's continuation and providing the expression's result. It can tell the async method that the operation has already completed. For example, `TaskAwaiter` does this when the awaited task is already complete. In that case, the `await` expression executes synchronously, so it does not guarantee that control will return to the caller at that point.
+
+  It follows that an async method which completes entirely synchronously also returns a task that is already complete. Awaiting that task can then proceed synchronously in the caller as well. This is both a useful optimization and a source of surprises if you expect a particular `await` to split the method's execution into separate stages. To force an asynchronous yield, use `await Task.Yield()`, provided a possible extra context switch is acceptable.
+
+  There is also a useful benefit: unlike an iterator, an async method performs argument validation at the start of its body immediately and synchronously, although exceptions from a task-returning async method are recorded in the returned task. An iterator can hide a violated precondition because its body does not start executing until the first call to `MoveNext()`. That call may never happen at all, as in `xs.Take(0)`.
+
+* Because an async method can execute entirely synchronously, some aspects of decompiling it are much simpler than for a `yield return` iterator. Remove the control-flow edges responsible for suspending `await` expressions—specifically, the `if (!awaiter.IsCompleted) { … }` branches—and the method already becomes recognizable enough for further transformations.
+
+  Iterators have additional control-flow edges too, but theirs make decompilation harder. They need an execution path for the case where a caller invokes `Dispose()` on an `IEnumerator` before the iterator has run to completion. Async methods have no equivalent mechanism, which prevents them from directly providing the full behavior of iterators. On disposal, the iterator executes all `finally` blocks enclosing the `yield return` at which it last suspended:
+
+  ```c#
+  private IEnumerator<int> Boo(int x, int y)
+  {
+    try { yield return x; }
+    finally { Console.WriteLine("finally1"); }
+
+    try { yield return y; }
+    finally { Console.WriteLine("finally2"); }
   }
+  ```
 
-  IEnumerator<int> IEnumerable<int>.GetEnumerator() {
-    // если энумератор спросили с того же треда
-    if (Environment.CurrentManagedThreadId == _initialThreadId
-        && _state == -2) { // и нас не трогали до этого
-      _state = 0;  // отмечаем что нас использовали
-      return this; // никаких аллокаций
+  This becomes something like the following, using the IL `fault` construct in the pseudocode:
+
+  ```c#
+  class BooIterator : IEnumerator<int>, IDisposable
+  {
+    private int _current, _state;
+    public int _x, _y;
+
+    public bool MoveNext()
+    {
+      try
+      {
+        switch (_state)
+        {
+          case 0:
+            _state = 1;
+            _current = _x; // first yield return
+            _state = 2;
+            return true;
+          case 2:
+            _state = 1;
+            Finally1(); // leave the first try-finally
+            _state = 3;
+            _current = _y; // second yield return
+            _state = 4;
+            return true;
+          case 4:
+            _state = 3;
+            Finally2(); // leave the second try-finally
+            break;
+        }
+        return false;
+      }
+      fault // only when an exception is thrown
+      {
+        Dispose();
+      }
     }
 
-    return new Iterator(0);
+    public void Dispose()
+    {
+      switch (_state)
+      {
+        case 1:
+        case 2:
+          try { } finally { Finally1(); }
+          break;
+        case 3:
+        case 4:
+          try { } finally { Finally2(); }
+          break;
+      }
+    }
+
+    private void Finally1()
+    {
+      _state = -1;
+      Console.WriteLine("finally1");
+    }
+
+    private void Finally2()
+    {
+      _state = -1;
+      Console.WriteLine("finally2");
+    }
+  }
+  ```
+
+  The same `finally` block may need to run both from `MoveNext()` and from `Dispose()`. Each `finally` block therefore becomes a separate method, and the decompiler has to reconstruct the iterator from pieces spread across several methods. In addition, an iterator always suspends at each `yield return`. The decompiler must build a table of iterator states and replace assignments such as `_state = 42;` with control-flow edges leading directly to the code for state 42.
+
+* You may have noticed that, unlike an iterator, an async method uses a generated struct rather than a class to hold its state. This is another optimization: it avoids allocating storage for the captured state on the heap when every `await` completes synchronously. It is hard to say how often that happens in practice; I am skeptical. It certainly complicates compilers and decompilers, which now have to handle captured state stored in value types.
+
+  The two forms of captured state do not combine neatly, either. Async lambdas and anonymous methods therefore generate two separate containers. For example:
+
+  ```c#
+  private void M(int x)
+  {
+    Func<Task> f = async () =>
+    {
+      Console.WriteLine(x);
+    };
+  }
+  ```
+
+  Becomes:
+
+  ```c#
+  private void M(int x)
+  {
+    var displayClass1 = new DisplayClass1();
+    displayClass1._x = x;
+    Func<Task> func = displayClass1.Lambda;
   }
 
-  ...
-}
-```
+  // closure for the lambda expression
+  [CompilerGenerated]
+  sealed class DisplayClass1
+  {
+    public int _x;
 
-Почему “хак”? Да потому что получается, что кодогенерация языковой фичи завязана на инфраструктуру трединга, которая в мире разных дотнет-платформ может отличаться. Приведенный выше кусок кода скомпилирован под .NET Framework 4.5, в котором ввели статическое свойство `Environment.CurrentManagedThreadId` чтобы хоть как-то обобщить способ идентификации тредов. До 4.5 этот же итератор компилировался бы с вызовом `Thread.CurrentThread.ManagedThreadId` - это приводит к тому, что проект, тергетируемый под .NET Framework 4.5, но реально использующий только апишки .NET Framework 4.0 будет крэшиться на итераторах по `MethodMissingException` будучи запущенным на машине с .NET Framework только версии 4.0. Очень хорошо, что `async`-методы “одноразовые” и подобных оптимизаций там нету.
+    public Task Lambda()
+    {
+      DisplayClass2 displayClass2;
+      displayClass2._this = this;
+      displayClass2._builder = AsyncTaskMethodBuilder.Create();
+      displayClass2._state = -1;
+      displayClass2._builder.Start(ref displayClass2);
+      return displayClass2._builder.Task;
+    }
 
-Подводя итог хочется сказать, что не смотря на множество отличий в кодогенерации итераторов и `async`-методов, для конечного пользователя важным я бы назвал лишь недетерменированность момента возвращения управления вызвающей стороне.
+    // state machine for the async method
+    [StructLayout(LayoutKind.Auto)]
+    private struct DisplayClass2 : IAsyncStateMachine
+    {
+      public int _state;
+      public AsyncTaskMethodBuilder _builder;
+      public DisplayClass1 _this;
+
+      void IAsyncStateMachine.MoveNext()
+      {
+        try
+        {
+          if (_state != -3)
+            Console.WriteLine(_this._x);
+        }
+        catch (Exception ex)
+        {
+          _state = -2;
+          _builder.SetException(ex);
+          return;
+        }
+        _state = -2;
+        _builder.SetResult();
+      }
+    }
+  }
+  ```
+
+* Iterators have one more optimization that async methods do not need. The assumption is that, in the vast majority of uses of an `IEnumerable` iterator, `GetEnumerator()` is called exactly once. It would therefore be useful to avoid allocating a separate `IEnumerator` object. The compiler uses a rather blunt trick to do this:
+
+  ```c#
+  [CompilerGenerated]
+  private sealed class Iterator
+    : IEnumerable<int>, IEnumerator<int> // both interfaces in one object
+  {
+    private int _current;
+    private int _state;
+    private int _initialThreadId;
+
+    public Iterator(int state)
+    {
+      _state = state; // initially -2
+      // remember the thread on which the iterator method was called
+      _initialThreadId = Environment.CurrentManagedThreadId;
+    }
+
+    IEnumerator<int> IEnumerable<int>.GetEnumerator()
+    {
+      // reuse the object only on the original thread
+      if (Environment.CurrentManagedThreadId == _initialThreadId
+          && _state == -2) // and only if it has not been used yet
+      {
+        _state = 0;   // mark it as used
+        return this; // no allocation
+      }
+
+      return new Iterator(0);
+    }
+
+    …
+  }
+  ```
+
+  Why call it a trick? Because code generation for a language feature now depends on threading infrastructure, which can differ across .NET platforms. The code above was compiled for .NET Framework 4.5, which introduced the static `Environment.CurrentManagedThreadId` property to provide a more uniform way to identify threads. Before 4.5, the same iterator would have used `Thread.CurrentThread.ManagedThreadId`. As a result, an application targeting .NET Framework 4.5, even if its source code uses only .NET Framework 4.0 APIs, can fail with a `MissingMethodException` in an iterator when run on a machine with only .NET Framework 4.0 installed. Async methods are single-use, so they have no need for this optimization.
+
+Despite all these differences in code generation, the one I consider most important for callers is that the point at which an async method returns control is not fixed.
