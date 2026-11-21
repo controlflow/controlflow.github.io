@@ -2,10 +2,10 @@ Proceed to my [personal dev blog](https://controlflow.github.io).
 
 ## Local development
 
-Install Ruby 3.3 (see `.ruby-version`), then run:
+Install Ruby 4.0 (see `.ruby-version`), then run:
 
 ```sh
-gem install bundler -v 4.0.20
+gem install bundler -v 4.1.0
 bundle install
 bundle exec jekyll serve
 ```
@@ -16,6 +16,7 @@ and opens the local preview. The lockfile supports Windows, Linux and Apple Sili
 ## Validation and dependency updates
 
 ```sh
+bundle update --bundler
 bundle update
 bundle outdated --strict
 bundle exec bundle-audit check --update
